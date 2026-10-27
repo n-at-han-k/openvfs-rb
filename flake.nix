@@ -6,12 +6,53 @@
     utils.url = "github:numtide/flake-utils";
     mine.url = "github:n-at-han-k/flake.nix";
     mine.inputs.nixpkgs.follows = "nixpkgs";
+    openvfs = {
+      url = "github:opencloud-eu/openvfs";
+      flake = false;
+    };
+    desktop = {
+      url = "github:opencloud-eu/desktop";
+      flake = false;
+    };
   };
-  outputs = { self, mine, nixpkgs, utils }:
+  outputs = { self, mine, nixpkgs, utils, openvfs, desktop }:
     utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
         lib = mine.lib.${system};
+
+        openvfsLibrary = pkgs.stdenv.mkDerivation {
+          pname = "openvfs";
+          version = "0.1.0";
+          src = openvfs;
+          buildInputs = [ pkgs.nlohmann_json ];
+
+          buildPhase = ''
+            runHook preBuild
+            mkdir -p generated/openvfs "$out/include/openvfs" "$out/lib"
+            cat > generated/openvfs/version.h <<'EOF'
+            #pragma once
+            #define OPENVFS_VERSION_MAJOR 0
+            EOF
+            cat > generated/openvfs/openvfs_export.h <<'EOF'
+            #pragma once
+            #define OPENVFS_EXPORT
+            EOF
+            $CXX -std=c++23 -fPIC -shared -D_FILE_OFFSET_BITS=64 \
+              -I"$src/src" -Igenerated -I"${pkgs.nlohmann_json}/include" \
+              "$src/src/openvfs/openvfs.cpp" "$src/src/openvfs/xattr.cpp" \
+              -o "$out/lib/libopenvfs.so"
+            runHook postBuild
+          '';
+
+          installPhase = ''
+            runHook preInstall
+            cp "$src/src/openvfs/openvfs.h" "$out/include/openvfs/"
+            cp "$src/src/openvfs/openvfconstants.h" "$out/include/openvfs/"
+            cp generated/openvfs/version.h generated/openvfs/openvfs_export.h "$out/include/openvfs/"
+            runHook postInstall
+          '';
+        };
 
         # bundlerEnv evaluates the gemspec, so it needs the gemspec and the version it reads.
         # The gemspec parses lib/openvfs/version.rb rather than requiring it, so only the
@@ -37,6 +78,9 @@
           buildInputs = with pkgs; [
             gems
             gems.wrappedRuby
+            openvfsLibrary
+            pkgs.gcc
+            pkgs.nlohmann_json
           ];
 
           shellHook = /* bash */ ''
@@ -46,10 +90,11 @@
 
             export LANG="''${LANG:-C.UTF-8}"
             export LC_ALL="''${LC_ALL:-$LANG}"
+            export OPENVFS_PREFIX="${openvfsLibrary}"
 
             # This gem is not in the bundle — it is the repository — so put this lib/ and
             # fixtures/ on the load path and let `require "openvfs"` find the working tree.
-            export RUBYLIB="$PWD/lib:$PWD/fixtures''${RUBYLIB:+:$RUBYLIB}"
+            export RUBYLIB="$PWD/lib:$PWD/ext:$PWD/fixtures''${RUBYLIB:+:$RUBYLIB}"
           '';
         };
       }

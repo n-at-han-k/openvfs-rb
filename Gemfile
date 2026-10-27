@@ -6,6 +6,7 @@
 source "https://rubygems.org"
 
 gemspec
+gem "rice"
 
 group :test do
   gem "sus"
@@ -16,11 +17,15 @@ end
 
 group :lint do
   gem "rubocop"
-  gem "rubocop-nathan-k"
+  gem "rubocop-nathank"
 
   gem "decode"
 end
 
 group :release do
   gem "gem_kit-release"
+end
+
+group :development do
+  gem "ruby-bindgen"
 end

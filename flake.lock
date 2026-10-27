@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "desktop": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793111062,
+        "narHash": "sha256-Eg2d07G3LkSlBwqOp3l/D9yfpAOAPVUG+4wXmwafbrE=",
+        "owner": "opencloud-eu",
+        "repo": "desktop",
+        "rev": "02870c539a6ba54313b3595399634c2a9d144b90",
+        "type": "github"
+      },
+      "original": {
+        "owner": "opencloud-eu",
+        "repo": "desktop",
+        "type": "github"
+      }
+    },
     "mine": {
       "inputs": {
         "nixpkgs": [
@@ -34,10 +50,28 @@
         "type": "indirect"
       }
     },
+    "openvfs": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1792567894,
+        "narHash": "sha256-e2r+L1jUV/iSVuVbf9bvgSCiyxbuUvNej+ynZre8+dM=",
+        "owner": "opencloud-eu",
+        "repo": "openvfs",
+        "rev": "c20c0fe4925607cb835a2d98f29632e954c558dd",
+        "type": "github"
+      },
+      "original": {
+        "owner": "opencloud-eu",
+        "repo": "openvfs",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
+        "desktop": "desktop",
         "mine": "mine",
         "nixpkgs": "nixpkgs",
+        "openvfs": "openvfs",
         "utils": "utils"
       }
     },

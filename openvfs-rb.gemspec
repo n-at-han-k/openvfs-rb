@@ -20,12 +20,14 @@ Gem::Specification.new do |spec|
   spec.metadata["source_code_uri"] = spec.homepage
 
   spec.files = Dir.glob(
-    ["lib/**/*", "license.md", "README.md"],
+    ["ext/**/*.{rb,cpp,h,hpp}", "lib/**/*", "license.md", "README.md"],
     File::FNM_DOTMATCH,
     base: __dir__,
   )
 
   spec.require_paths = ["lib"]
+  spec.extensions = ["ext/openvfs/extconf.rb"]
 
   spec.add_dependency "gem_kit", "~> 0.2"
+  spec.add_dependency "rice", "~> 4.0"
 end

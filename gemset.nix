@@ -74,6 +74,27 @@
     };
     version = "0.30.0";
   };
+  ffi = {
+    groups = ["default" "development"];
+    platforms = [];
+    source = {
+      remotes = ["https://rubygems.org"];
+      sha256 = "1kqasqvy8d7r09ri4n6bkdwbk63j7afd9ilsw34nzlgh0qp69ldw";
+      type = "gem";
+    };
+    version = "1.17.4";
+  };
+  ffi-clang = {
+    dependencies = ["ffi"];
+    groups = ["default" "development"];
+    platforms = [];
+    source = {
+      remotes = ["https://rubygems.org"];
+      sha256 = "024jrn2l0l1s9znwlac0g4a2ln518nqz3x9slf70f042hz1jy02w";
+      type = "gem";
+    };
+    version = "0.16.0";
+  };
   fiber-annotation = {
     groups = ["default" "test"];
     platforms = [];
@@ -177,7 +198,7 @@
     version = "1.8.6";
   };
   openvfs-rb = {
-    dependencies = ["gem_kit"];
+    dependencies = ["gem_kit" "rice"];
     groups = ["default"];
     platforms = [];
     source = {
@@ -258,6 +279,16 @@
     };
     version = "2.13.1";
   };
+  rice = {
+    groups = ["default"];
+    platforms = [];
+    source = {
+      remotes = ["https://rubygems.org"];
+      sha256 = "1z8x24jpyizgcywzb6kq3cn2dnx3w58pylwmcvj5pzq6lyf3cb37";
+      type = "gem";
+    };
+    version = "4.12.0";
+  };
   rubocop = {
     dependencies = ["json" "language_server-protocol" "lint_roller" "parallel" "parser" "rainbow" "regexp_parser" "rubocop-ast" "ruby-progressbar" "unicode-display_width"];
     groups = ["lint"];
@@ -279,6 +310,28 @@
       type = "gem";
     };
     version = "1.50.0";
+  };
+  rubocop-nathank = {
+    dependencies = ["decode" "lint_roller" "prism" "rubocop"];
+    groups = ["lint"];
+    platforms = [];
+    source = {
+      remotes = ["https://rubygems.org"];
+      sha256 = "02q983ghkd1l51lqz468dyippyzv46k13ksg4vnljwlkypphrbdg";
+      type = "gem";
+    };
+    version = "1.0.0";
+  };
+  ruby-bindgen = {
+    dependencies = ["ffi" "ffi-clang"];
+    groups = ["development"];
+    platforms = [];
+    source = {
+      remotes = ["https://rubygems.org"];
+      sha256 = "19frgqbl3ly5gml2m5qf9lmk4pc2w3zvi4f6jfkgcy2caf3zh62h";
+      type = "gem";
+    };
+    version = "1.0.0";
   };
   ruby-coverage = {
     groups = ["default" "test"];
