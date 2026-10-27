@@ -1,0 +1,27 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: The suite is green
+        run: nix develop --command bundle exec sus
+
+      - name: The tree is clean
+        if: ${{ !cancelled() }}
+        run: nix develop --command bundle exec rubocop
