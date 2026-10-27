@@ -19,6 +19,13 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
+      - name: Build native extensions
+        run: |
+          nix develop --command ruby -C ext/openvfs extconf.rb
+          nix develop --command make -C ext/openvfs
+          nix develop --command ruby -C ext/openvfs/occ extconf.rb
+          nix develop --command make -C ext/openvfs/occ
+
       - name: The suite is green
         run: nix develop --command bundle exec sus
 

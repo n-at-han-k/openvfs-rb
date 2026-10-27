@@ -26,7 +26,7 @@ Gem::Specification.new do |spec|
   )
 
   spec.require_paths = ["lib"]
-  spec.extensions = ["ext/openvfs/extconf.rb"]
+  spec.extensions = ["ext/openvfs/extconf.rb", "ext/openvfs/occ/extconf.rb"]
 
   spec.add_dependency "gem_kit", "~> 0.2"
   spec.add_dependency "rice", "~> 4.0"

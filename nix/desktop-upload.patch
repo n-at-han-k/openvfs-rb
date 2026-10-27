@@ -1,0 +1,250 @@
+diff --git a/src/libsync/abstractnetworkjob.cpp b/src/libsync/abstractnetworkjob.cpp
+--- a/src/libsync/abstractnetworkjob.cpp
++++ b/src/libsync/abstractnetworkjob.cpp
+@@ -17,9 +17,9 @@
+ #include <QNetworkRequest>
++#include <QXmlStreamReader>
+ 
+ #include "common/asserts.h"
+-#include "networkjobs.h"
++#include "abstractnetworkjob.h"
+ #include "account.h"
+-#include "owncloudpropagator.h"
+ #include "httplogger.h"
+ 
+ #include "creds/abstractcredentials.h"
+diff --git a/src/libsync/account.h b/src/libsync/account.h
+--- a/src/libsync/account.h
++++ b/src/libsync/account.h
+@@ -21,9 +21,9 @@
+ #include "appprovider.h"
+ #include "capabilities.h"
+ #include "jobqueue.h"
+-#include "resources/resources.h"
+ 
+ #include <QByteArray>
++#include <QIcon>
+ #include <QGradient>
+ #include <QNetworkAccessManager>
+ #include <QNetworkCookie>
+@@ -38,7 +38,9 @@
+ #include <QSslSocket>
+ #include <QUrl>
+ #include <QUuid>
++#ifndef OPENVFS_OCC_UPLOAD_ONLY
+ #include <QtQmlIntegration/QtQmlIntegration>
++#endif
+ 
+ class QSettings;
+ class QNetworkReply;
+@@ -71,7 +73,9 @@
+     Q_PROPERTY(bool hasAvatar READ hasAvatar NOTIFY avatarChanged)
+     Q_PROPERTY(QGradient::Preset avatarGradient READ avatarGradient NOTIFY displayNameChanged)
+     Q_PROPERTY(QUrl url READ url NOTIFY urlChanged)
++#ifndef OPENVFS_OCC_UPLOAD_ONLY
+     QML_ELEMENT
+     QML_UNCREATABLE("Only created in the C++ code")
++#endif
+ 
+ public:
+@@ -244,5 +248,5 @@
+     JobQueue _jobQueue;
+     JobQueueGuard _queueGuard;
+-    CredentialManager *_credentialManager;
++    CredentialManager *_credentialManager = nullptr;
+     AppProvider _appProvider;
+ 
+diff --git a/src/libsync/account.cpp b/src/libsync/account.cpp
+--- a/src/libsync/account.cpp
++++ b/src/libsync/account.cpp
+@@ -18,11 +18,13 @@
+ #include "common/asserts.h"
+ #include "cookiejar.h"
+ #include "creds/abstractcredentials.h"
++#ifndef OPENVFS_OCC_UPLOAD_ONLY
+ #include "creds/credentialmanager.h"
+ #include "graphapi/spacesmanager.h"
+ #include "networkjobs.h"
+ #include "networkjobs/resources.h"
+ #include "theme.h"
++#endif
+ 
+ #include <QAuthenticator>
+ #include <QDir>
+@@ -59,17 +61,21 @@
+     , _capabilities({}, {})
+     , _jobQueue(this)
+     , _queueGuard(&_jobQueue)
++#ifndef OPENVFS_OCC_UPLOAD_ONLY
+     , _credentialManager(new CredentialManager(this))
+     , _spacesManager(new GraphApi::SpacesManager(this))
++#endif
+ {
+     qRegisterMetaType<AccountPtr>("AccountPtr");
+ 
++#ifndef OPENVFS_OCC_UPLOAD_ONLY
+     _cacheDirectory = QStringLiteral("%1/accounts/%2").arg(commonCacheDirectory(), _uuid.toString(QUuid::WithoutBraces));
+     QDir().mkpath(_cacheDirectory);
+ 
+     // we need to make sure the directory we pass to the resources cache exists
+     const QString resourcesCacheDir = QStringLiteral("%1/resources/").arg(_cacheDirectory);
+     QDir().mkpath(resourcesCacheDir);
+     _resourcesCache = new ResourcesCache(resourcesCacheDir, this);
++#endif
+ }
+ 
+@@ -188,9 +194,11 @@
+     // the network access manager takes ownership when setCache is called, so we have to reinitialize it every time we reset the manager
++#ifndef OPENVFS_OCC_UPLOAD_ONLY
+     _networkCache = new QNetworkDiskCache(this);
+     const QString networkCacheLocation = (QStringLiteral("%1/network/").arg(_cacheDirectory));
+     qCDebug(lcAccount) << u"Cache location for account" << this << u"set to" << networkCacheLocation;
+     _networkCache->setCacheDirectory(networkCacheLocation);
+     _am->setCache(_networkCache);
++#endif
+ 
+     if (jar) {
+         _am->setCookieJar(jar);
+@@ -368,6 +376,8 @@
++#ifndef OPENVFS_OCC_UPLOAD_ONLY
+ ResourcesCache *Account::resourcesCache() const
+ {
+     return _resourcesCache;
+ }
++#endif
+ 
+ } // namespace OCC
+diff --git a/src/libsync/appprovider.cpp b/src/libsync/appprovider.cpp
+--- a/src/libsync/appprovider.cpp
++++ b/src/libsync/appprovider.cpp
+@@ -21,5 +21,7 @@
+ #include "common/utility.h"
+ #include "libsync/account.h"
++#ifndef OPENVFS_OCC_UPLOAD_ONLY
+ #include "libsync/networkjobs/jsonjob.h"
++#endif
+ 
+ #include <QCoreApplication>
+@@ -76,3 +78,4 @@
++#ifndef OPENVFS_OCC_UPLOAD_ONLY
+ bool AppProvider::open(const AccountPtr &account, const QString &localPath, const QByteArray &fileId) const
+ {
+     const auto &a = app(localPath);
+@@ -94,3 +97,4 @@
+     }
+     return false;
+ }
++#endif
+diff --git a/src/libsync/creds/abstractcredentials.h b/src/libsync/creds/abstractcredentials.h
+--- a/src/libsync/creds/abstractcredentials.h
++++ b/src/libsync/creds/abstractcredentials.h
+@@ -20,5 +20,4 @@
+ #include "accessmanager.h"
+ #include "accountfwd.h"
+ #include "opencloudsynclib.h"
+-#include <../csync.h>
+ 
+diff --git a/src/libsync/common/utility.cpp b/src/libsync/common/utility.cpp
+--- a/src/libsync/common/utility.cpp
++++ b/src/libsync/common/utility.cpp
+@@ -22,8 +22,9 @@
+ #include "common/filesystembase.h"
+ #include "common/version.h"
+ #include "libsync/filesystem.h"
+-#include "libsync/theme.h"
++#ifndef OPENVFS_OCC_UPLOAD_ONLY
+ #include "resources/jsontheme.h"
++#endif
+ 
+ // Note:  This file must compile without QtGui
+ #include <QCollator>
+@@ -507,3 +508,4 @@
++#ifndef OPENVFS_OCC_UPLOAD_ONLY
+ void Utility::markDirectoryAsSyncRoot(const QString &path, const QUuid &accountUuid)
+ {
+     const auto [oldTag, oldUuid] = getDirectorySyncRootMarkings(path);
+@@ -560,5 +562,6 @@
+     }
+ }
++#endif
+ 
+ } // namespace OCC
+ 
+diff --git a/src/libsync/propagateupload.h b/src/libsync/propagateupload.h
+--- a/src/libsync/propagateupload.h
++++ b/src/libsync/propagateupload.h
+@@ -16,6 +16,10 @@
++#include "abstractnetworkjob.h"
++#include <QLoggingCategory>
++#ifndef OPENVFS_OCC_UPLOAD_ONLY
+ #include "owncloudpropagator.h"
+ #include "networkjobs.h"
++#endif
+ 
+ #include <QBuffer>
+ #include <QFile>
+ #include <QElapsedTimer>
+@@ -28,5 +31,6 @@
+ Q_DECLARE_LOGGING_CATEGORY(lcPropagateUpload)
+ Q_DECLARE_LOGGING_CATEGORY(lcPropagateUploadV1)
+ 
++#ifndef OPENVFS_OCC_UPLOAD_ONLY
+ class BandwidthManager;
+ 
+@@ -79,5 +83,6 @@
+ public Q_SLOTS:
+     void slotJobUploadProgress(qint64 sent, qint64 t);
+ };
++#endif
+ 
+ /**
+@@ -125,3 +130,4 @@
++#ifndef OPENVFS_OCC_UPLOAD_ONLY
+ /**
+  * @brief The PropagateUploadFileCommon class is the code common between all chunking algorithms
+  * @ingroup libsync
+@@ -267,4 +273,5 @@
+     void slotPutFinished();
+     void slotUploadProgress(qint64, qint64);
+ };
++#endif
+ }
+diff --git a/src/libsync/propagateupload.cpp b/src/libsync/propagateupload.cpp
+--- a/src/libsync/propagateupload.cpp
++++ b/src/libsync/propagateupload.cpp
+@@ -15,4 +15,5 @@
+ #include "propagateupload.h"
++#ifndef OPENVFS_OCC_UPLOAD_ONLY
+ #include "account.h"
+ #include "filesystem.h"
+ #include "networkjobs.h"
+@@ -29,4 +30,5 @@
+ #include "libsync/theme.h"
++#endif
+ 
+ #include <QDir>
+ #include <QFileInfo>
+@@ -43,6 +45,7 @@
+ Q_LOGGING_CATEGORY(lcPropagateUpload, "sync.propagator.upload", QtInfoMsg)
+ Q_LOGGING_CATEGORY(lcPropagateUploadV1, "sync.propagator.upload.v1", QtInfoMsg)
+ 
++#ifndef OPENVFS_OCC_UPLOAD_ONLY
+ /**
+  * We do not want to upload files that are currently being modified.
+  * To avoid that, we don't upload files that have a modification time
+@@ -61,4 +64,5 @@
+         // if the mtime is too much in the future we *do* upload the file
+         && secondsSinceMod > -1s;
+ }
++#endif
+ 
+@@ -110,3 +114,4 @@
++#ifndef OPENVFS_OCC_UPLOAD_ONLY
+ const QString PropagateUploadFileCommon::fileChangedMessage()
+ {
+     return tr("Local file changed during sync. It will be resumed.");
+@@ -636,3 +641,4 @@
+         Q_EMIT abortFinished();
+ }
++#endif
+ }

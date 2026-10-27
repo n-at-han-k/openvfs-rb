@@ -21,6 +21,8 @@
         pkgs = nixpkgs.legacyPackages.${system};
         lib = mine.lib.${system};
 
+        desktopUpload = import ./nix/desktop-upload.nix { inherit pkgs desktop; };
+
         openvfsLibrary = pkgs.stdenv.mkDerivation {
           pname = "openvfs";
           version = "0.1.0";
@@ -74,11 +76,16 @@
 
       in
       {
+        packages.desktop-upload = desktopUpload;
+
         devShells.default = lib.mkRubyShell {
           buildInputs = with pkgs; [
             gems
             gems.wrappedRuby
             openvfsLibrary
+            desktopUpload
+            pkgs.qt6.qtbase
+            pkgs.pkg-config
             pkgs.gcc
             pkgs.nlohmann_json
           ];
@@ -91,6 +98,7 @@
             export LANG="''${LANG:-C.UTF-8}"
             export LC_ALL="''${LC_ALL:-$LANG}"
             export OPENVFS_PREFIX="${openvfsLibrary}"
+            export OPENCLOUD_UPLOAD_PREFIX="${desktopUpload}"
 
             # This gem is not in the bundle — it is the repository — so put this lib/ and
             # fixtures/ on the load path and let `require "openvfs"` find the working tree.
