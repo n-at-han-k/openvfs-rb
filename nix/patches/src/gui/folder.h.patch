@@ -1,0 +1,21 @@
+diff --git a/src/gui/folder.h b/src/gui/folder.h
+index a955b62..3ed1701 100644
+--- a/src/gui/folder.h
++++ b/src/gui/folder.h
+@@ -29,7 +29,6 @@
+ 
+ #include <QDateTime>
+ #include <QObject>
+-#include <QtQml/QQmlEngine>
+ 
+ #include <chrono>
+ #include <set>
+@@ -61,8 +60,6 @@ class OPENCLOUD_GUI_EXPORT Folder : public QObject
+     Q_PROPERTY(bool isSyncRunning READ isSyncRunning NOTIFY isSyncRunningChanged)
+     Q_PROPERTY(bool isDeployed READ isDeployed CONSTANT)
+     Q_PROPERTY(Vfs::Mode vfsMode READ vfsMode CONSTANT)
+-    QML_ELEMENT
+-    QML_UNCREATABLE("Folders can only be created by the FolderManager")
+ 
+ public:
+     enum class ChangeReason {

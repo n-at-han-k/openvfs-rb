@@ -1,0 +1,3 @@
+[submodule "opencloud-desktop"]
+	path = opencloud-desktop
+	url = https://github.com/opencloud-eu/desktop.git

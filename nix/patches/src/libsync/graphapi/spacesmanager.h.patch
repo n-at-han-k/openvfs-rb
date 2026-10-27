@@ -1,0 +1,12 @@
+diff --git a/src/libsync/graphapi/spacesmanager.h b/src/libsync/graphapi/spacesmanager.h
+index 1305432..34702de 100644
+--- a/src/libsync/graphapi/spacesmanager.h
++++ b/src/libsync/graphapi/spacesmanager.h
+@@ -19,7 +19,6 @@
+ #include "libsync/accountfwd.h"
+ #include "libsync/graphapi/space.h"
+ 
+-#include <OAIDrive.h>
+ 
+ #include <algorithm>
+ 

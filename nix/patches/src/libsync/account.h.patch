@@ -1,0 +1,67 @@
+diff --git a/src/libsync/account.h b/src/libsync/account.h
+index f0957d3..fa8c919 100644
+--- a/src/libsync/account.h
++++ b/src/libsync/account.h
+@@ -21,13 +21,12 @@
+ #include "appprovider.h"
+ #include "capabilities.h"
+ #include "jobqueue.h"
+-#include "resources/resources.h"
+ 
+ #include <QByteArray>
++#include <QIcon>
+ #include <QGradient>
+ #include <QNetworkAccessManager>
+ #include <QNetworkCookie>
+-#include <QNetworkDiskCache>
+ #include <QNetworkRequest>
+ #include <QPixmap>
+ #include <QSharedPointer>
+@@ -38,7 +37,6 @@
+ #include <QSslSocket>
+ #include <QUrl>
+ #include <QUuid>
+-#include <QtQmlIntegration/QtQmlIntegration>
+ 
+ class QSettings;
+ class QNetworkReply;
+@@ -71,8 +69,6 @@ class OPENCLOUD_SYNC_EXPORT Account : public QObject
+     Q_PROPERTY(bool hasAvatar READ hasAvatar NOTIFY avatarChanged)
+     Q_PROPERTY(QGradient::Preset avatarGradient READ avatarGradient NOTIFY displayNameChanged)
+     Q_PROPERTY(QUrl url READ url NOTIFY urlChanged)
+-    QML_ELEMENT
+-    QML_UNCREATABLE("Only created in the C++ code")
+ 
+ public:
+     /**
+@@ -177,7 +173,6 @@ public:
+ 
+     QUuid uuid() const;
+ 
+-    CredentialManager *credentialManager() const;
+ 
+     GraphApi::SpacesManager *spacesManager() const;
+ 
+@@ -186,7 +181,6 @@ public:
+      */
+     void invalidCredentialsEncountered();
+ 
+-    ResourcesCache *resourcesCache() const;
+ 
+ public Q_SLOTS:
+     /// Used when forgetting credentials
+@@ -236,14 +230,11 @@ private:
+     QSet<QSslCertificate> _approvedCerts;
+     Capabilities _capabilities;
+     QPointer<AccessManager> _am;
+-    QPointer<QNetworkDiskCache> _networkCache = nullptr;
+-    QPointer<ResourcesCache> _resourcesCache;
+     QScopedPointer<AbstractCredentials> _credentials;
+     bool _http2Supported = true;
+ 
+     JobQueue _jobQueue;
+     JobQueueGuard _queueGuard;
+-    CredentialManager *_credentialManager;
+     AppProvider _appProvider;
+ 
+     GraphApi::SpacesManager *_spacesManager = nullptr;

@@ -1,0 +1,21 @@
+diff --git a/src/gui/accountstate.h b/src/gui/accountstate.h
+index dcebe23..68c7109 100644
+--- a/src/gui/accountstate.h
++++ b/src/gui/accountstate.h
+@@ -23,7 +23,6 @@
+ 
+ #include <QByteArray>
+ #include <QPointer>
+-#include <QtQmlIntegration/QtQmlIntegration>
+ 
+ #include <memory>
+ 
+@@ -43,8 +42,6 @@ class OPENCLOUD_GUI_EXPORT AccountState : public QObject
+     Q_PROPERTY(Account *account READ accountForQml CONSTANT)
+     Q_PROPERTY(bool isConnected READ isConnected NOTIFY isConnectedChanged)
+     Q_PROPERTY(AccountState::State state READ state NOTIFY stateChanged)
+-    QML_ELEMENT
+-    QML_UNCREATABLE("Only created by AccountManager")
+ 
+ public:
+     enum State : uint8_t {

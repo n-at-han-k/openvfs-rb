@@ -112,6 +112,27 @@ dependencies, then make `opencloud-upload.pc` visible to `pkg-config`.
 `OpenVFS::OCC::DESKTOP_VERSION` and `DESKTOP_REVISION` identify the compiled
 desktop source.
 
+### Local OpenCloud server
+
+Integration tests that exercise the upload path against a real OpenCloud server
+live in `test/openvfs/occ_real_server.rb`. They register a temporary local folder
+with OpenVFS, create a document in it, and upload it through the desktop upload
+job.
+
+The suite skips those tests while no server answers `OPENCLOUD_TEST_URL`, so the
+default run stays hermetic.
+
+```sh
+docker compose up -d opencloud
+nix develop --command bundle exec sus test/openvfs/occ_real_server.rb
+```
+
+The compose file starts `opencloudeu/opencloud-rolling:9.0.0` with WebDAV basic
+authentication enabled and listens on `127.0.0.1:${OPENCLOUD_PORT:-18280}`.
+Override the credentials with `OPENCLOUD_TEST_USERNAME`, `OPENCLOUD_TEST_PASSWORD`,
+and `OPENCLOUD_TEST_SPACE_ID` when the default admin user is not the account you
+want to upload into.
+
 ## Contributing
 
 See [RELEASE.md](RELEASE.md) for the release process and

@@ -1,0 +1,144 @@
+diff --git a/src/gui/folder.cpp b/src/gui/folder.cpp
+index 3e512df..0a75f05 100644
+--- a/src/gui/folder.cpp
++++ b/src/gui/folder.cpp
+@@ -18,7 +18,6 @@
+ 
+ #include "account.h"
+ #include "accountstate.h"
+-#include "application.h"
+ #include "common/filesystembase.h"
+ #include "common/syncjournalfilerecord.h"
+ #include "common/version.h"
+@@ -26,29 +25,21 @@
+ #include "filesystem.h"
+ #include "folderman.h"
+ #include "folderwatcher.h"
+-#include "gui/accountsettings.h"
+ #include "gui/folderdefinition.h"
+-#include "guiutility.h"
+ #include "libsync/graphapi/spacesmanager.h"
+ #include "libsync/vfs/vfs.h"
+ #include "localdiscoverytracker.h"
+-#include "resources/jsontheme.h"
+ #include "scheduling/syncscheduler.h"
+-#include "settingsdialog.h"
+-#include "socketapi/socketapi.h"
+ #include "syncengine.h"
+ #include "syncresult.h"
+-#include "theme.h"
+ 
+ #ifdef Q_OS_WIN
+ #include "common/utility_win.h"
+ #endif
+ 
+-#include "fonticon.h"
+-#include "gui/fonticonmessagebox.h"
+-#include "notifications/systemnotificationmanager.h"
+ 
+ 
++#include <QCoreApplication>
+ #include <QDir>
+ #include <QSettings>
+ #include <QTimer>
+@@ -130,12 +121,6 @@ Folder::Folder(const FolderDefinition &definition, const AccountStatePtr &accoun
+         connect(_engine.data(), &SyncEngine::itemCompleted,
+             _localDiscoveryTracker.data(), &LocalDiscoveryTracker::slotItemCompleted);
+ 
+-        connect(_accountState->account()->spacesManager(), &GraphApi::SpacesManager::spaceChanged, this, [this](GraphApi::Space *changedSpace) {
+-            if (_definition.spaceId() == changedSpace->id()) {
+-                prepareFolder(path(), displayName(), changedSpace->drive().getDescription(), true);
+-                Q_EMIT spaceChanged();
+-            }
+-        });
+ 
+         // Initialize the vfs plugin. Do this after the UI is running, so we can show a dialog when something goes wrong.
+         QTimer::singleShot(0, this, &Folder::startVfs);
+@@ -374,9 +359,6 @@ QUrl Folder::webDavUrl() const
+ {
+     const QString spaceId = _definition.spaceId();
+     if (!spaceId.isEmpty()) {
+-        if (auto *space = _accountState->account()->spacesManager()->space(spaceId)) {
+-            return QUrl(space->drive().getRoot().getWebDavUrl());
+-        }
+     }
+     return _definition.webDavUrl();
+ }
+@@ -535,7 +517,7 @@ void Folder::createGuiLog(const QString &filename, LogStatus status, int count,
+         }
+ 
+         if (!text.isEmpty()) {
+-            ocApp()->systemNotificationManager()->notify({tr("Sync Activity"), text, Resources::FontIcon(u'')});
++            qCInfo(lcFolder) << u"Sync Activity:" << text;
+         }
+     }
+ }
+@@ -547,10 +529,9 @@ void Folder::startVfs()
+ 
+     VfsSetupParams vfsParams(_accountState->account(), webDavUrl(), _definition.spaceId(), displayName(), _engine.get());
+     vfsParams.journal = &_journal;
+-    vfsParams.providerDisplayName = Resources::JsonTheme::instance().applicationDisplayName();
+-    vfsParams.providerName = Resources::JsonTheme::instance().applicationName();
++    vfsParams.providerDisplayName = QCoreApplication::applicationName();
++    vfsParams.providerName = QCoreApplication::applicationName();
+     vfsParams.providerVersion = Version::version();
+-    vfsParams.socketPath = Utility::socketApiSocketPath();
+ 
+     connect(&_engine->syncFileStatusTracker(), &SyncFileStatusTracker::fileStatusChanged,
+         _vfs.data(), &Vfs::fileStatusChanged);
+@@ -799,8 +780,6 @@ void Folder::wipeForRemoval()
+     // Delete files that have been partially downloaded.
+     slotDiscardDownloadProgress();
+ 
+-    // Unregister the socket API so it does not keep the .sync_journal file open
+-    FolderMan::instance()->socketApi()->slotUnregisterPath(this);
+     _journal.close(); // close the sync journal
+ 
+     // Remove db and temporaries
+@@ -895,7 +874,7 @@ void Folder::startSync()
+     _syncResult.reset();
+     setSyncState(SyncResult::SyncRunning);
+ 
+-    qCInfo(lcFolder) << u"*** Start syncing " << displayName() << u"client version" << Theme::instance()->aboutVersions(Theme::VersionFormat::OneLiner);
++    qCInfo(lcFolder) << u"*** Start syncing " << displayName() << u"client version" << Version::displayString();
+ 
+     setDirtyNetworkLimits();
+ 
+@@ -965,7 +944,7 @@ void Folder::slotSyncFinished(bool success)
+         // probably removing the folder
+         return;
+     }
+-    qCInfo(lcFolder) << u"Client version" << Theme::instance()->aboutVersions(Theme::VersionFormat::OneLiner);
++    qCInfo(lcFolder) << u"Client version" << Version::displayString();
+ 
+     bool syncError = !_syncResult.errorStrings().isEmpty();
+     if (syncError) {
+@@ -1099,27 +1078,13 @@ void Folder::warnOnNewExcludedItem(const SyncJournalFileRecord &record, QStringV
+                                             "It will not be synchronized.")
+                                              .arg(fi.filePath());
+ 
+-    ocApp()->systemNotificationManager()->notify({tr("»%1« is not synchronized").arg(fi.fileName()), message, Resources::FontIcon(u'')});
++    qCWarning(lcFolder) << u"»" << fi.fileName() << u"« is not synchronized:" << message;
+ }
+ 
+ void Folder::slotWatcherUnreliable(const QString &message)
+ {
+     qCWarning(lcFolder) << u"Folder watcher for" << path() << u"became unreliable:" << message;
+ 
+-    QMessageBox *msgBox = new FontIconMessageBox({Resources::FontIcon::DefaultGlyphes::Info}, Resources::JsonTheme::instance().applicationDisplayName(),
+-        tr("Changes in synchronized folders could not be tracked reliably.\n"
+-           "\n"
+-           "This means that the synchronization client might not upload local changes "
+-           "immediately and will instead only scan for local changes and upload them "
+-           "occasionally (every two hours by default).\n"
+-           "\n"
+-           "%1")
+-            .arg(message),
+-        {}, ocApp()->settingsDialog());
+-
+-    msgBox->setAttribute(Qt::WA_DeleteOnClose);
+-    ocApp()->showSettings();
+-    msgBox->open();
+ }
+ 
+ void Folder::registerFolderWatcher()

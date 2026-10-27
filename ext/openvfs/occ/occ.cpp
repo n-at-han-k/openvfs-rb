@@ -113,6 +113,61 @@ private:
     QString token_;
 };
 
+// Basic auth credentials for servers that authenticate WebDAV clients with a
+// username and password instead of an OpenID Connect bearer token, e.g. the
+// local OpenCloud instances started with PROXY_ENABLE_BASIC_AUTH.
+class BasicAccessManager : public ::OCC::AccessManager
+{
+public:
+    BasicAccessManager(QString username, QString password, QObject *parent)
+        : ::OCC::AccessManager(parent), username_(std::move(username)), password_(std::move(password))
+    {
+    }
+
+protected:
+    QNetworkReply *createRequest(Operation operation, const QNetworkRequest &request, QIODevice *body) override
+    {
+        QNetworkRequest authenticated(request);
+        authenticated.setRawHeader("Authorization", "Basic " + QStringLiteral("%1:%2").arg(username_, password_).toUtf8().toBase64());
+        return ::OCC::AccessManager::createRequest(operation, authenticated, body);
+    }
+
+private:
+    QString username_;
+    QString password_;
+};
+
+class BasicCredentials : public ::OCC::AbstractCredentials
+{
+public:
+    BasicCredentials(QString username, QString password)
+        : username_(std::move(username)), password_(std::move(password))
+    {
+    }
+
+    ::OCC::AccessManager *createAM() const override { return new BasicAccessManager(username_, password_, _account); }
+    bool ready() const override { return !username_.isEmpty() && !password_.isEmpty(); }
+    void fetchFromKeychain() override
+    {
+        _wasFetched = true;
+        Q_EMIT fetched();
+    }
+    void restartOauth() override { Q_EMIT authenticationFailed(); }
+    void persist() override {}
+    void invalidateToken() override { clear(); }
+    void forgetSensitiveData() override { clear(); }
+
+private:
+    void clear()
+    {
+        username_.clear();
+        password_.clear();
+    }
+
+    QString username_;
+    QString password_;
+};
+
 struct AccountState
 {
     ::OCC::AccountPtr account;
@@ -133,15 +188,26 @@ struct AccountState
 class Account
 {
 public:
-    Account(const std::string &url, const std::string &token)
+    Account(const std::string &url, const std::string &token, const std::string &username = "", const std::string &password = "")
     {
         check_thread();
         const auto endpoint = server_url(url);
-        const auto bearer = access_token(token);
         state_ = std::make_shared<AccountState>();
         state_->account = ::OCC::Account::create(QUuid::createUuid());
         state_->account->setUrl(endpoint);
-        state_->account->setCredentials(new TokenCredentials(bearer));
+        if (password.empty()) {
+            if (username.empty()) {
+                const auto bearer = access_token(token);
+                state_->account->setCredentials(new TokenCredentials(bearer));
+            } else {
+                // Account(url, username, password) lands the username in the token
+                // slot and the password in the username slot once the optional
+                // trailing arguments are defaulted, so swap them back into a pair.
+                state_->account->setCredentials(new BasicCredentials(text(token), text(username)));
+            }
+        } else {
+            state_->account->setCredentials(new BasicCredentials(text(username), text(password)));
+        }
     }
 
     std::string url() const
@@ -441,11 +507,13 @@ extern "C" void Init_occ()
     module.define_constant("DESKTOP_VERSION", ::OCC::Version::displayString().toStdString());
     module.define_constant("DESKTOP_REVISION", ::OCC::Version::gitSha().toStdString());
 
-    define_class_under<Account>(module, "Account")
-        .define_constructor(Constructor<Account, const std::string &, const std::string &>(), Arg("url"), Arg("access_token"))
-        .define_method("url", &Account::url)
-        .define_method("uuid", &Account::uuid)
-        .define_method("access_token=", &Account::set_access_token);
+    auto account_type = define_class_under<Account>(module, "Account");
+    account_type.define_constructor(
+        Constructor<Account, const std::string &, const std::string &, const std::string &, const std::string &>(),
+        Arg("url"), Arg("access_token") = std::string(""), Arg("username") = std::string(""), Arg("password") = std::string());
+    account_type.define_method("url", &Account::url);
+    account_type.define_method("uuid", &Account::uuid);
+    account_type.define_method("access_token=", &Account::set_access_token);
 
     define_class_under<UploadResult>(module, "UploadResult")
         .define_method("ok?", &UploadResult::ok)

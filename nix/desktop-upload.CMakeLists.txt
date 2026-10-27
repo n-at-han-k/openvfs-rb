@@ -22,7 +22,15 @@ add_library(opencloud-upload STATIC
     src/libsync/cookiejar.cpp
     src/libsync/httplogger.cpp
     src/libsync/jobqueue.cpp
+    src/libsync/discovery.cpp
+    src/libsync/localdiscoverytracker.cpp
+    src/libsync/owncloudpropagator.cpp
     src/libsync/propagateupload.cpp
+    src/libsync/propagateuploadtus.cpp
+    src/libsync/propagateuploadv1.cpp
+    src/gui/folder.cpp
+    src/gui/folderwatcher.cpp
+    src/gui/folderwatcher_linux.cpp
     src/libsync/creds/abstractcredentials.cpp
     src/libsync/common/checksumalgorithms.cpp
     src/libsync/common/chronoelapsedtimer.cpp
@@ -36,15 +44,26 @@ set_target_properties(opencloud-upload PROPERTIES
     VISIBILITY_INLINES_HIDDEN ON
 )
 target_compile_definitions(opencloud-upload PUBLIC
-    OPENVFS_OCC_UPLOAD_ONLY
     OPENCLOUD_BUILT_AS_STATIC
     QT_NO_KEYWORDS
     WITH_HTTP2=1
+)
+target_compile_definitions(opencloud-upload PRIVATE
+    QT_NO_CAST_TO_ASCII
+    QT_NO_CAST_FROM_ASCII
+    QT_NO_URL_CAST_FROM_STRING
+    QT_NO_CAST_FROM_BYTEARRAY
+    QT_USE_QSTRINGBUILDER
+    QT_MESSAGELOGCONTEXT
+    QT_NO_FOREACH
+    QT_DISABLE_DEPRECATED_BEFORE=0x060200
+    QT_NO_CONTEXTLESS_CONNECT
 )
 target_compile_options(opencloud-upload PRIVATE -ffunction-sections -fdata-sections)
 target_include_directories(opencloud-upload PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libsync
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui
     ${CMAKE_CURRENT_BINARY_DIR}/generated
     ${CMAKE_CURRENT_BINARY_DIR}/generated/libsync
 )
@@ -55,6 +74,11 @@ generate_export_header(opencloud-upload
     EXPORT_FILE_NAME generated/libsync/opencloudsynclib.h
     STATIC_DEFINE OPENCLOUD_BUILT_AS_STATIC
 )
+
+# src/gui headers include "gui/opencloudguilib.h"; the upstream build generates it
+# from the opencloudgui target, which we do not build. Alias it onto our own macro.
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/generated/gui/opencloudguilib.h
+    "#pragma once\n#include \"libsync/opencloudsynclib.h\"\n#define OPENCLOUD_GUI_EXPORT OPENCLOUD_SYNC_EXPORT\n")
 
 configure_file(opencloud-upload.pc.in opencloud-upload.pc @ONLY)
 install(TARGETS opencloud-upload ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})

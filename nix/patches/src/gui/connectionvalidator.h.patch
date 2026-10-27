@@ -1,0 +1,12 @@
+diff --git a/src/gui/connectionvalidator.h b/src/gui/connectionvalidator.h
+index a7fac33..0ed287e 100644
+--- a/src/gui/connectionvalidator.h
++++ b/src/gui/connectionvalidator.h
+@@ -17,7 +17,6 @@
+ #include "gui/opencloudguilib.h"
+ 
+ #include "common/chronoelapsedtimer.h"
+-#include "gui/guiutility.h"
+ #include "libsync/accountfwd.h"
+ 
+ #include <QNetworkReply>

@@ -1,0 +1,46 @@
+services:
+  opencloud:
+    image: opencloudeu/opencloud-rolling:9.0.0
+    user: "1000:1000"
+    entrypoint:
+      - /bin/sh
+    command:
+      - -c
+      - opencloud init || true; opencloud server
+    environment:
+      OC_URL: ${OC_URL:-http://127.0.0.1:18280}
+      OC_INSECURE: ${OC_INSECURE:-true}
+      PROXY_TLS: "false"
+      # Enable HTTP Basic authentication for WebDAV clients that do not speak
+      # OpenID Connect, e.g. the native Ruby upload tests.
+      PROXY_ENABLE_BASIC_AUTH: ${PROXY_ENABLE_BASIC_AUTH:-true}
+      IDM_ADMIN_PASSWORD: ${IDM_ADMIN_PASSWORD:-openvfs-rb-test-admin}
+      IDM_CREATE_DEMO_USERS: ${IDM_CREATE_DEMO_USERS:-false}
+      OC_LOG_LEVEL: ${OC_LOG_LEVEL:-info}
+      OC_DEFAULT_LANGUAGE: ${OC_DEFAULT_LANGUAGE:-en}
+      FRONTEND_CHECK_FOR_UPDATES: ${FRONTEND_CHECK_FOR_UPDATES:-false}
+      START_ADDITIONAL_SERVICES: ${START_ADDITIONAL_SERVICES:-}
+      # The built-in IDP requires an https issuer URL to bootstrap.
+      IDP_ISS: ${IDP_ISS:-https://cloud.opencloud.test}
+    ports:
+      - "${OPENCLOUD_PORT:-18280}:9200"
+    volumes:
+      - opencloud-config:/etc/opencloud
+      - opencloud-data:/var/lib/opencloud
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-fsS",
+          "http://127.0.0.1:9200/health",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    restart: unless-stopped
+
+volumes:
+  opencloud-config:
+  opencloud-data:

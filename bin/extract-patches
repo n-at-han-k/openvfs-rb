@@ -1,0 +1,34 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Turns the working-tree changes in the opencloud-desktop submodule back into nix/patches/, one patch per changed file, mirroring the submodule's own layout. The inverse of bin/apply-patches.
+
+require "fileutils"
+require "pathname"
+
+ROOT = Pathname.new(__dir__).parent
+SUBMODULE = ROOT / "opencloud-desktop"
+PATCHES = ROOT / "nix" / "patches"
+
+def changed_files = `git -C #{SUBMODULE} diff --name-only`.split("\n")
+
+def diff_for(path) = `git -C #{SUBMODULE} diff -- #{path}`
+
+unless SUBMODULE.join(".git").exist?
+  abort "opencloud-desktop is not checked out; run: git submodule update --init"
+end
+
+changed = changed_files
+if changed.empty?
+  abort "opencloud-desktop has no changes to extract; run bin/apply-patches first"
+end
+
+FileUtils.rm_rf(PATCHES)
+changed.each do |path|
+  out = PATCHES / "#{path}.patch"
+  out.dirname.mkpath
+  out.write(diff_for(path))
+  puts "extracted  #{path}"
+end
+
+puts "\n#{changed.size} patches written to #{PATCHES.relative_path_from(ROOT)}"
