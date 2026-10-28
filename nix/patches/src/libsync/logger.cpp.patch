@@ -1,0 +1,24 @@
+diff --git a/src/libsync/logger.cpp b/src/libsync/logger.cpp
+index f146146..b0255d2 100644
+--- a/src/libsync/logger.cpp
++++ b/src/libsync/logger.cpp
+@@ -13,8 +13,9 @@
+  */
+ 
+ #include "logger.h"
++
++#include "common/version.h"
+ #include "configfile.h"
+-#include "theme.h"
+ 
+ #include <QCoreApplication>
+ #include <QtConcurrent>
+@@ -39,7 +40,7 @@ constexpr int minLogsToKeepC = 5;
+ 
+ QString logHeader()
+ {
+-    return u"%1 %2\n"_s.arg(OCC::Theme::instance()->aboutVersions(OCC::Theme::VersionFormat::OneLiner), qApp->applicationName());
++    return u"%1 %2\n"_s.arg(OCC::Version::displayString(), qApp->applicationName());
+ }
+ 
+ #ifdef Q_OS_WIN

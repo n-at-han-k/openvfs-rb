@@ -1,0 +1,104 @@
+diff --git a/src/libsync/configfile.cpp b/src/libsync/configfile.cpp
+index 2359d8d..db5c9bb 100644
+--- a/src/libsync/configfile.cpp
++++ b/src/libsync/configfile.cpp
+@@ -13,13 +13,13 @@
+  */
+ 
+ #include "configfile.h"
++
++#include <QCoreApplication>
+ #include "common/asserts.h"
+ #include "common/utility.h"
+ #include "common/version.h"
+ #include "libsync/globalconfig.h"
+ #include "logger.h"
+-#include "resources/jsontheme.h"
+-#include "theme.h"
+ 
+ #include "creds/abstractcredentials.h"
+ 
+@@ -28,7 +28,6 @@
+ #include <QDir>
+ #include <QFile>
+ #include <QFileInfo>
+-#include <QHeaderView>
+ #include <QLoggingCategory>
+ #include <QOperatingSystemVersion>
+ #include <QSettings>
+@@ -159,44 +158,6 @@ std::chrono::seconds ConfigFile::timeout() const
+     return val ? std::chrono::seconds(val) : 5min;
+ }
+ 
+-void ConfigFile::saveGeometry(QWidget *w)
+-{
+-    OC_ASSERT(!w->objectName().isNull());
+-    auto settings = makeQSettings();
+-    settings.beginGroup(w->objectName());
+-    settings.setValue(geometryC(), w->saveGeometry());
+-    settings.sync();
+-}
+-
+-void ConfigFile::restoreGeometry(QWidget *w)
+-{
+-    w->restoreGeometry(getValue(QStringLiteral("%1/%2").arg(geometryC(), w->objectName())).toByteArray());
+-}
+-
+-void ConfigFile::saveGeometryHeader(QHeaderView *header)
+-{
+-    if (!header)
+-        return;
+-    OC_ASSERT(!header->objectName().isEmpty());
+-
+-    auto settings = makeQSettings();
+-    settings.beginGroup(header->objectName());
+-    settings.setValue(geometryC(), header->saveState());
+-    settings.sync();
+-}
+-
+-bool ConfigFile::restoreGeometryHeader(QHeaderView *header)
+-{
+-    Q_ASSERT(header && !header->objectName().isNull());
+-
+-    auto settings = makeQSettings();
+-    settings.beginGroup(header->objectName());
+-    if (settings.contains(geometryC())) {
+-        header->restoreState(settings.value(geometryC()).toByteArray());
+-        return true;
+-    }
+-    return false;
+-}
+ 
+ QString ConfigFile::configPath()
+ {
+@@ -225,7 +186,9 @@ QString ConfigFile::excludeFile(Scope scope) const
+ 
+ QString ConfigFile::defaultExcludeFile()
+ {
+-    return QStringLiteral(":/client/OpenCloud/theme/universal/%1").arg(excludeFileNameC());
++    // Upstream reads this from the resources library's Qt resources, which are not
++    // built here; the build installs the file and names its path instead.
++    return QStringLiteral(OPENCLOUD_SYNC_EXCLUDE_FILE);
+ }
+ 
+ QString ConfigFile::backup() const
+@@ -250,7 +213,7 @@ QString ConfigFile::backup() const
+ 
+ QString ConfigFile::configFile()
+ {
+-    return u"%1%2.cfg"_s.arg(configPath(), Resources::JsonTheme::instance().applicationName().toLower());
++    return u"%1%2.cfg"_s.arg(configPath(), QCoreApplication::applicationName().toLower());
+ }
+ 
+ QSettings ConfigFile::makeQSettings()
+@@ -421,10 +384,6 @@ void ConfigFile::setPauseSyncWhenMetered(bool isChecked)
+ 
+ bool ConfigFile::moveToTrash() const
+ {
+-    if (Theme::instance()->enableMoveToTrash()) {
+-        return getValue(moveToTrashC(), false).toBool();
+-    }
+-
+     return false;
+ }
+ 

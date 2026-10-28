@@ -1,0 +1,46 @@
+diff --git a/src/libsync/syncresult.cpp b/src/libsync/syncresult.cpp
+index dc42d90..684bd5f 100644
+--- a/src/libsync/syncresult.cpp
++++ b/src/libsync/syncresult.cpp
+@@ -15,7 +15,7 @@
+ #include "syncresult.h"
+ #include "progressdispatcher.h"
+ 
+-#include <QApplication>
++#include <QCoreApplication>
+ 
+ namespace OCC {
+ 
+@@ -40,23 +40,23 @@ QString Utility::enumToDisplayName(SyncResult::Status status)
+ {
+     switch (status) {
+     case SyncResult::Status::Undefined:
+-        return QApplication::translate("SyncResult::Status", "Undefined");
++        return QCoreApplication::translate("SyncResult::Status", "Undefined");
+     case SyncResult::Status::Queued:
+-        return QApplication::translate("SyncResult::Status", "Queued");
++        return QCoreApplication::translate("SyncResult::Status", "Queued");
+     case SyncResult::Status::SyncRunning:
+-        return QApplication::translate("SyncResult::Status", "Sync running");
++        return QCoreApplication::translate("SyncResult::Status", "Sync running");
+     case SyncResult::Status::Success:
+-        return QApplication::translate("SyncResult::Status", "Success");
++        return QCoreApplication::translate("SyncResult::Status", "Success");
+     case SyncResult::Status::Error:
+-        return QApplication::translate("SyncResult::Status", "Error");
++        return QCoreApplication::translate("SyncResult::Status", "Error");
+     case SyncResult::Status::SetupError:
+-        return QApplication::translate("SyncResult::Status", "Setup error");
++        return QCoreApplication::translate("SyncResult::Status", "Setup error");
+     case SyncResult::Status::Problem:
+-        return QApplication::translate("SyncResult::Status", "Success, some files were ignored.");
++        return QCoreApplication::translate("SyncResult::Status", "Success, some files were ignored.");
+     case SyncResult::Status::Paused:
+-        return QApplication::translate("SyncResult::Status", "Sync paused");
++        return QCoreApplication::translate("SyncResult::Status", "Sync paused");
+     case SyncResult::Status::Offline:
+-        return QApplication::translate("SyncResult::Status", "Offline");
++        return QCoreApplication::translate("SyncResult::Status", "Offline");
+     }
+     Q_UNREACHABLE();
+ }

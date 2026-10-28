@@ -1,5 +1,5 @@
 diff --git a/src/libsync/common/utility.cpp b/src/libsync/common/utility.cpp
-index 2dc938f..db913c2 100644
+index 2dc938f..4648216 100644
 --- a/src/libsync/common/utility.cpp
 +++ b/src/libsync/common/utility.cpp
 @@ -22,8 +22,6 @@
@@ -11,40 +11,37 @@ index 2dc938f..db913c2 100644
  
  // Note:  This file must compile without QtGui
  #include <QCollator>
-@@ -504,36 +502,6 @@ QString Utility::currentCpuArch()
- }
- #endif
- 
--void Utility::markDirectoryAsSyncRoot(const QString &path, const QUuid &accountUuid)
--{
--    const auto [oldTag, oldUuid] = getDirectorySyncRootMarkings(path);
+@@ -507,29 +505,21 @@ QString Utility::currentCpuArch()
+ void Utility::markDirectoryAsSyncRoot(const QString &path, const QUuid &accountUuid)
+ {
+     const auto [oldTag, oldUuid] = getDirectorySyncRootMarkings(path);
 -    if (oldUuid == accountUuid && oldTag == Resources::JsonTheme::instance().organizationDomain()) {
--        return;
--    }
--    Q_ASSERT(oldTag.isEmpty());
--    Q_ASSERT(oldUuid.isNull());
--
++    if (oldUuid == accountUuid && oldTag == QCoreApplication::organizationDomain()) {
+         return;
+     }
+     Q_ASSERT(oldTag.isEmpty());
+     Q_ASSERT(oldUuid.isNull());
+ 
 -    auto result1 = FileSystem::Tags::set(path, dirTag(), Resources::JsonTheme::instance().organizationDomain());
--    if (!result1) {
++    auto result1 = FileSystem::Tags::set(path, dirTag(), QCoreApplication::organizationDomain());
+     if (!result1) {
 -        qCWarning(lcUtility) << QStringLiteral("Failed to set tag on »%1«: %2").arg(path, result1.error())
 -#ifdef Q_OS_WIN
 -                             << QStringLiteral("(filesystem %1)").arg(FileSystem::fileSystemForPath(path))
 -#endif // Q_OS_WIN
 -            ;
--        return;
--    }
--
--    auto result2 = FileSystem::Tags::set(path, uuidTag(), accountUuid.toString());
--    if (!result2) {
++        qCWarning(lcUtility) << QStringLiteral("Failed to set tag on %1: %2").arg(path, result1.error());
+         return;
+     }
+ 
+     auto result2 = FileSystem::Tags::set(path, uuidTag(), accountUuid.toString());
+     if (!result2) {
 -        qCWarning(lcUtility) << QStringLiteral("Failed to set tag on »%1«: %2").arg(path, result2.error())
 -#ifdef Q_OS_WIN
 -                             << QStringLiteral("(filesystem %1)").arg(FileSystem::fileSystemForPath(path))
 -#endif // Q_OS_WIN
 -            ;
--        return;
--    }
--}
--
- std::pair<QString, QUuid> Utility::getDirectorySyncRootMarkings(const QString &path)
- {
-     auto existingDirTag = FileSystem::Tags::get(path, dirTag());
++        qCWarning(lcUtility) << QStringLiteral("Failed to set tag on %1: %2").arg(path, result2.error());
+         return;
+     }
+ }

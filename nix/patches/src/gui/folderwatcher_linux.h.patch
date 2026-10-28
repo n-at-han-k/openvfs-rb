@@ -1,0 +1,13 @@
+diff --git a/src/gui/folderwatcher_linux.h b/src/gui/folderwatcher_linux.h
+index 001e193..70fe820 100644
+--- a/src/gui/folderwatcher_linux.h
++++ b/src/gui/folderwatcher_linux.h
+@@ -30,7 +30,7 @@ namespace OCC {
+  * @brief Linux (inotify) API implementation of FolderWatcher
+  * @ingroup gui
+  */
+-class OPENCLOUD_GUI_EXPORT FolderWatcherPrivate : public QObject
++class FolderWatcherPrivate : public QObject
+ {
+     Q_OBJECT
+ public:

@@ -1,0 +1,26 @@
+diff --git a/src/gui/scheduling/etagwatcher.cpp b/src/gui/scheduling/etagwatcher.cpp
+index bca8473..9a244bd 100644
+--- a/src/gui/scheduling/etagwatcher.cpp
++++ b/src/gui/scheduling/etagwatcher.cpp
+@@ -45,21 +45,6 @@ ETagWatcher::ETagWatcher(FolderMan *folderMan, QObject *parent)
+                         _lastEtagJob[f] = etag;
+                         f->accountState()->tagLastSuccessfullETagRequest(time);
+                     });
+-                    connect(f, &Folder::spaceChanged, this, [f, this] {
+-                        const QString etag = Utility::normalizeEtag(f->space()->drive().getRoot().getETag());
+-                        // the server must provide a valid etag but there might be bugs
+-                        // https://github.com/owncloud/ocis/issues/7160
+-                        if (OC_ENSURE_NOT(etag.isEmpty())) {
+-                            auto &info = _lastEtagJob[f];
+-                            if (f->canSync() && info != etag) {
+-                                qCDebug(lcEtagWatcher) << u"Scheduling sync of" << f->displayName() << f->path() << u"due to an etag change";
+-                                info = etag;
+-                                _folderMan->scheduler()->enqueueFolder(f);
+-                            }
+-                        } else {
+-                            qCWarning(lcEtagWatcher) << u"Invalid empty etag received for" << f->displayName() << f->path();
+-                        }
+-                    });
+                 }
+             }
+         }

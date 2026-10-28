@@ -3,8 +3,8 @@ libdir=@CMAKE_INSTALL_FULL_LIBDIR@
 includedir=@CMAKE_INSTALL_FULL_INCLUDEDIR@/opencloud-upload
 
 Name: opencloud-upload
-Description: OpenCloud Desktop account and PUTFileJob subset
+Description: OpenCloud Desktop watching, discovery and upload subset
 Version: @MIRALL_VERSION@
-Requires: Qt6Core Qt6Gui Qt6Network
+Requires: Qt6Core Qt6Concurrent Qt6Gui Qt6Network sqlite3
 Libs: -L${libdir} -lopencloud-upload
-Cflags: -I${includedir} -I${includedir}/libsync -DOPENVFS_OCC_UPLOAD_ONLY -DOPENCLOUD_BUILT_AS_STATIC -DQT_NO_KEYWORDS
+Cflags: -I${includedir} -I${includedir}/libsync -I${includedir}/gui -I${includedir}/cmd -DOPENCLOUD_BUILT_AS_STATIC -DQT_NO_KEYWORDS

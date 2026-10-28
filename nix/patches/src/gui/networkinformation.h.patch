@@ -1,0 +1,22 @@
+diff --git a/src/gui/networkinformation.h b/src/gui/networkinformation.h
+index 4730b27..179f3db 100644
+--- a/src/gui/networkinformation.h
++++ b/src/gui/networkinformation.h
+@@ -14,8 +14,6 @@
+ 
+ #pragma once
+ 
+-#include "gui/opencloudguilib.h"
+-
+ #include <QNetworkInformation>
+ 
+ namespace OCC {
+@@ -26,7 +24,7 @@ namespace OCC {
+  * This class is used instead of QNetworkInformation so we do not need to check for an instance,
+  * and to facilitate debugging by being able to force certain network states (i.e. captive portal).
+  */
+-class OPENCLOUD_GUI_EXPORT NetworkInformation : public QObject
++class NetworkInformation : public QObject
+ {
+     Q_OBJECT
+ 

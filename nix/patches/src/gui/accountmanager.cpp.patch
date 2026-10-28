@@ -1,0 +1,59 @@
+diff --git a/src/gui/accountmanager.cpp b/src/gui/accountmanager.cpp
+index 7ccbea0..015b9f9 100644
+--- a/src/gui/accountmanager.cpp
++++ b/src/gui/accountmanager.cpp
+@@ -14,11 +14,10 @@
+ 
+ #include "accountmanager.h"
+ #include "account.h"
++#include "common/asserts.h"
++#include "creds/httpcredentials.h"
++#include "common/utility.h"
+ #include "configfile.h"
+-#include "creds/credentialmanager.h"
+-#include "guiutility.h"
+-#include <creds/httpcredentialsgui.h>
+-#include <theme.h>
+ 
+ #ifdef Q_OS_WIN
+ #include "common/utility_win.h"
+@@ -35,6 +34,7 @@ auto urlC()
+     return QStringLiteral("url");
+ }
+ 
++
+ auto defaultSyncRootC()
+ {
+     return QStringLiteral("default_sync_root");
+@@ -77,13 +77,6 @@ AccountManager *AccountManager::instance()
+     return &instance;
+ }
+ 
+-AccountManager *AccountManager::create(QQmlEngine *qmlEngine, QJSEngine *)
+-{
+-    Q_ASSERT(qmlEngine->thread() == AccountManager::instance()->thread());
+-    QJSEngine::setObjectOwnership(AccountManager::instance(), QJSEngine::CppOwnership);
+-    return instance();
+-}
+-
+ bool AccountManager::restore()
+ {
+     auto settings = ConfigFile::makeQSettings();
+@@ -114,7 +107,8 @@ bool AccountManager::restore()
+         acc->setCapabilities({acc->url(), capabilities});
+         acc->setDefaultSyncRoot(settings.value(defaultSyncRootC()).toString());
+ 
+-        acc->setCredentials(new HttpCredentialsGui);
++        acc->setCredentials(new HttpCredentials());
++
+ 
+         // now the server cert
+         const auto certs = QSslCertificate::fromData(settings.value(caCertsKeyC()).toByteArray());
+@@ -221,7 +215,6 @@ void AccountManager::deleteAccount(AccountStatePtr account)
+ 
+     // Forget account credentials, cookies
+     account->account()->credentials()->forgetSensitiveData();
+-    account->account()->credentialManager()->clear();
+ 
+     Q_EMIT accountRemoved(account);
+     Q_EMIT accountsChanged();

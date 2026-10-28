@@ -1,0 +1,31 @@
+diff --git a/src/libsync/configfile.h b/src/libsync/configfile.h
+index a54dc69..6ab7642 100644
+--- a/src/libsync/configfile.h
++++ b/src/libsync/configfile.h
+@@ -23,8 +23,6 @@
+ #include <memory>
+ #include <optional>
+ 
+-class QWidget;
+-class QHeaderView;
+ class ExcludedFiles;
+ 
+ namespace OCC {
+@@ -123,8 +121,6 @@ public:
+ 
+     std::chrono::seconds timeout() const;
+ 
+-    void saveGeometry(QWidget *w);
+-    void restoreGeometry(QWidget *w);
+ 
+     // how often the check about new versions runs
+     std::chrono::milliseconds updateCheckInterval() const;
+@@ -138,8 +134,6 @@ public:
+     QString uiLanguage() const;
+     void setUiLanguage(const QString &uiLanguage);
+ 
+-    void saveGeometryHeader(QHeaderView *header);
+-    bool restoreGeometryHeader(QHeaderView *header);
+ 
+     /** The client version that last used this settings file.
+         Updated by configVersionMigration() at client startup. */

@@ -5,7 +5,9 @@ include(GNUInstallDirs)
 include(GenerateExportHeader)
 include(VERSION.cmake)
 
-find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Network)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Core Concurrent Gui Network)
+find_package(SQLite3 REQUIRED)
+find_package(Qt6Keychain REQUIRED)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -18,6 +20,7 @@ add_library(opencloud-upload STATIC
     src/libsync/accessmanager.cpp
     src/libsync/account.cpp
     src/libsync/appprovider.cpp
+    src/libsync/bandwidthmanager.cpp
     src/libsync/capabilities.cpp
     src/libsync/cookiejar.cpp
     src/libsync/httplogger.cpp
@@ -28,6 +31,8 @@ add_library(opencloud-upload STATIC
     src/libsync/propagateupload.cpp
     src/libsync/propagateuploadtus.cpp
     src/libsync/propagateuploadv1.cpp
+    src/libsync/syncfileitem.cpp
+    src/libsync/vfs/vfs.cpp
     src/gui/folder.cpp
     src/gui/folderwatcher.cpp
     src/gui/folderwatcher_linux.cpp
@@ -35,6 +40,58 @@ add_library(opencloud-upload STATIC
     src/libsync/common/checksumalgorithms.cpp
     src/libsync/common/chronoelapsedtimer.cpp
     src/libsync/common/utility.cpp
+    src/libsync/syncengine.cpp
+    src/libsync/syncresult.cpp
+    src/libsync/syncoptions.cpp
+    src/libsync/syncfilestatustracker.cpp
+    src/libsync/configfile.cpp
+    src/libsync/filesystem.cpp
+    src/libsync/progressdispatcher.cpp
+    src/libsync/discoveryphase.cpp
+    src/libsync/networkjobs.cpp
+    src/libsync/propagatedownload.cpp
+    src/libsync/propagateremotedelete.cpp
+    src/libsync/propagateremotemkdir.cpp
+    src/libsync/propagateremotemove.cpp
+    src/libsync/propagatorjobs.cpp
+    src/libsync/csync_exclude.cpp
+    src/libsync/path.cpp
+    src/libsync/localinfo.cpp
+    src/libsync/discoveryremoteinfo.cpp
+    src/libsync/networkjobs/simplenetworkjob.cpp
+    src/libsync/common/checksums.cpp
+    src/libsync/common/filesystembase.cpp
+    src/libsync/common/syncjournaldb.cpp
+    src/libsync/common/syncjournalfilerecord.cpp
+    src/libsync/common/ownsql.cpp
+    src/libsync/common/preparedsqlquerymanager.cpp
+    src/libsync/common/remotepermissions.cpp
+    src/libsync/common/syncfilestatus.cpp
+    src/libsync/common/plugin.cpp
+    src/gui/accountstate.cpp
+    src/gui/folderdefinition.cpp
+    src/gui/folderman.cpp
+    src/gui/scheduling/syncscheduler.cpp
+    src/gui/scheduling/etagwatcher.cpp
+    src/libsync/globalconfig.cpp
+    src/libsync/xattr.cpp
+    src/libsync/logger.cpp
+    src/libsync/networkjobs/getfilejob.cpp
+    src/libsync/networkjobs/jsonjob.cpp
+    src/gui/fetchserversettings.cpp
+    src/gui/networkinformation.cpp
+    src/gui/connectionvalidator.cpp
+    src/libsync/networkjobs/checkserverjobfactory.cpp
+    src/libsync/abstractcorejob.cpp
+    src/libsync/csync.cpp
+    src/plugins/vfs/off/vfs_off.cpp
+    src/gui/accountmanager.cpp
+    src/cmd/tokencredentials.cpp
+    src/libsync/platform.cpp
+    src/libsync/platform_unix.cpp
+    src/libsync/creds/httpcredentials.cpp
+    src/libsync/creds/credentialmanager.cpp
+    src/gui/main.cpp
     generated/version.cpp
 )
 
@@ -59,15 +116,19 @@ target_compile_definitions(opencloud-upload PRIVATE
     QT_DISABLE_DEPRECATED_BEFORE=0x060200
     QT_NO_CONTEXTLESS_CONNECT
 )
+target_compile_definitions(opencloud-upload PUBLIC
+    OPENCLOUD_SYNC_EXCLUDE_FILE="${CMAKE_INSTALL_FULL_DATADIR}/opencloud-upload/sync-exclude.lst"
+)
 target_compile_options(opencloud-upload PRIVATE -ffunction-sections -fdata-sections)
 target_include_directories(opencloud-upload PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src/libsync
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/cmd
     ${CMAKE_CURRENT_BINARY_DIR}/generated
     ${CMAKE_CURRENT_BINARY_DIR}/generated/libsync
 )
-target_link_libraries(opencloud-upload PUBLIC Qt6::Core Qt6::Gui Qt6::Network)
+target_link_libraries(opencloud-upload PUBLIC Qt6::Core Qt6::Concurrent Qt6::Gui Qt6::Network SQLite::SQLite3 Qt6Keychain::Qt6Keychain)
 
 generate_export_header(opencloud-upload
     EXPORT_MACRO_NAME OPENCLOUD_SYNC_EXPORT
@@ -75,17 +136,14 @@ generate_export_header(opencloud-upload
     STATIC_DEFINE OPENCLOUD_BUILT_AS_STATIC
 )
 
-# src/gui headers include "gui/opencloudguilib.h"; the upstream build generates it
-# from the opencloudgui target, which we do not build. Alias it onto our own macro.
-file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/generated/gui/opencloudguilib.h
-    "#pragma once\n#include \"libsync/opencloudsynclib.h\"\n#define OPENCLOUD_GUI_EXPORT OPENCLOUD_SYNC_EXPORT\n")
-
 configure_file(opencloud-upload.pc.in opencloud-upload.pc @ONLY)
 install(TARGETS opencloud-upload ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(DIRECTORY src/libsync DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/opencloud-upload
+install(DIRECTORY src/libsync src/gui src/cmd DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/opencloud-upload
     FILES_MATCHING PATTERN "*.h")
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/generated/libsync/opencloudsynclib.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/opencloud-upload/libsync)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/opencloud-upload.pc
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
+install(FILES src/resources/theme/universal/sync-exclude.lst
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/opencloud-upload)
 install(FILES COPYING DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/opencloud-upload)

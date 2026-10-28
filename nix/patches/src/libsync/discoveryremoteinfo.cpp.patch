@@ -1,0 +1,22 @@
+diff --git a/src/libsync/discoveryremoteinfo.cpp b/src/libsync/discoveryremoteinfo.cpp
+index 8c3a43e..9d501ee 100644
+--- a/src/libsync/discoveryremoteinfo.cpp
++++ b/src/libsync/discoveryremoteinfo.cpp
+@@ -5,7 +5,7 @@
+ 
+ #include "libsync/common/checksums.h"
+ 
+-#include <QApplication>
++#include <QCoreApplication>
+ 
+ using namespace OCC;
+ using namespace Qt::Literals::StringLiterals;
+@@ -66,7 +66,7 @@ public:
+             errors.append(u"permissions"_s);
+         }
+         if (!errors.empty()) {
+-            _error = QApplication::translate("RemoteInfo", "server reported no %1").arg(errors.join(u", "_s));
++            _error = QCoreApplication::translate("RemoteInfo", "server reported no %1").arg(errors.join(u", "_s));
+         }
+     }
+ 

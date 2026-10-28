@@ -1,8 +1,17 @@
 diff --git a/src/gui/accountstate.h b/src/gui/accountstate.h
-index dcebe23..68c7109 100644
+index dcebe23..eff3783 100644
 --- a/src/gui/accountstate.h
 +++ b/src/gui/accountstate.h
-@@ -23,7 +23,6 @@
+@@ -15,15 +15,13 @@
+ 
+ #pragma once
+ 
+-#include "gui/opencloudguilib.h"
+-
++#include "account.h"
+ #include "connectionvalidator.h"
+ #include "creds/abstractcredentials.h"
+ #include "jobqueue.h"
  
  #include <QByteArray>
  #include <QPointer>
@@ -10,7 +19,14 @@ index dcebe23..68c7109 100644
  
  #include <memory>
  
-@@ -43,8 +42,6 @@ class OPENCLOUD_GUI_EXPORT AccountState : public QObject
+@@ -37,14 +35,12 @@ class Account;
+ class TlsErrorDialog;
+ class FetchServerSettingsJob;
+ 
+-class OPENCLOUD_GUI_EXPORT AccountState : public QObject
++class AccountState : public QObject
+ {
+     Q_OBJECT
      Q_PROPERTY(Account *account READ accountForQml CONSTANT)
      Q_PROPERTY(bool isConnected READ isConnected NOTIFY isConnectedChanged)
      Q_PROPERTY(AccountState::State state READ state NOTIFY stateChanged)
@@ -19,3 +35,11 @@ index dcebe23..68c7109 100644
  
  public:
      enum State : uint8_t {
+@@ -79,6 +75,7 @@ public:
+      */
+     void writeToSettings(QSettings &settings) const;
+ 
++    static AccountState *create(AccountPtr account);
+     AccountPtr account() const;
+ 
+     ConnectionValidator::Status connectionStatus() const;
