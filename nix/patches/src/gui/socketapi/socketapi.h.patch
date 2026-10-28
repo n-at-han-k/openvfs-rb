@@ -1,0 +1,72 @@
+diff --git a/src/gui/socketapi/socketapi.h b/src/gui/socketapi/socketapi.h
+index 5695abe..2e82d1c 100644
+--- a/src/gui/socketapi/socketapi.h
++++ b/src/gui/socketapi/socketapi.h
+@@ -29,7 +29,6 @@ using SocketApiServer = QLocalServer;
+ using SocketApiSocket = QLocalSocket;
+ #endif
+ 
+-class QUrl;
+ class QLocalSocket;
+ 
+ namespace OCC {
+@@ -68,9 +67,6 @@ private Q_SLOTS:
+     void slotNewConnection();
+     void slotReadSocket();
+ 
+-    static void copyUrlToClipboard(const QUrl &link);
+-    static void emailPrivateLink(const QUrl &link);
+-    static void openPrivateLink(const QUrl &link);
+ 
+ private:
+     // Helper structure for getting information on a file
+@@ -101,41 +97,13 @@ private:
+ 
+     Q_INVOKABLE void command_VERSION(const QString &argument, SocketListener *listener);
+ 
+-    Q_INVOKABLE void command_SHARE_MENU_TITLE(const QString &argument, SocketListener *listener);
+ 
+-    // The context menu actions
+-    Q_INVOKABLE void command_SHARE(const QString &localFile, SocketListener *listener);
+-    Q_INVOKABLE void command_COPY_PRIVATE_LINK(const QString &localFile, SocketListener *listener);
+-    Q_INVOKABLE void command_EMAIL_PRIVATE_LINK(const QString &localFile, SocketListener *listener);
+-    Q_INVOKABLE void command_OPEN_PRIVATE_LINK(const QString &localFile, SocketListener *listener);
+-    Q_INVOKABLE void command_OPEN_PRIVATE_LINK_VERSIONS(const QString &localFile, SocketListener *listener);
+-    Q_INVOKABLE void command_MAKE_AVAILABLE_LOCALLY(const QString &filesArg, SocketListener *listener);
+-    Q_INVOKABLE void command_MAKE_ONLINE_ONLY(const QString &filesArg, SocketListener *listener);
+-    Q_INVOKABLE void command_DELETE_ITEM(const QString &localFile, SocketListener *listener);
+-    Q_INVOKABLE void command_MOVE_ITEM(const QString &localFile, SocketListener *listener);
+ 
+-    Q_INVOKABLE void command_OPEN_APP_LINK(const QString &localFile, SocketListener *listener);
+     // External sync
+     Q_INVOKABLE void command_V2_LIST_ACCOUNTS(const QSharedPointer<SocketApiJobV2> &job) const;
+ 
+     Q_INVOKABLE void command_V2_HYDRATE_FILE(const QSharedPointer<SocketApiJobV2> &job) const;
+ 
+-    // Sends the id and the client icon as PNG image (base64 encoded) in Json key "png"
+-    // e.g. { "id" : "1", "arguments" : { "png" : "hswehs343dj8..." } } or an error message in key "error"
+-    //
+-    // Argument is a SocketApiJobV2 job which contains an id and the required icon size in Json format
+-    // e.g. { "id" : "1", "arguments" : { "size" : 16 } }
+-    Q_INVOKABLE void command_V2_GET_CLIENT_ICON(const QSharedPointer<SocketApiJobV2> &job) const;
+-
+-    // Fetch the private link and call targetFun
+-    void fetchPrivateLinkUrlHelper(const QString &localFile, const std::function<void(const QUrl &url)> &targetFun);
+-
+-    /** Sends translated/branded strings that may be useful to the integration */
+-    Q_INVOKABLE void command_GET_STRINGS(const QString &argument, SocketListener *listener);
+-
+-    // Sends the context menu options relating to sharing to listener
+-    void sendSharingContextMenuOptions(const FileData &fileData, SocketListener *listener);
+-
+     /** Send the list of menu item. (added in version 1.1)
+      * argument is a list of files for which the menu should be shown, separated by '\x1e'
+      * Reply with  GET_MENU_ITEMS:BEGIN
+@@ -143,7 +111,6 @@ private:
+      * If flag contains 'd', the menu should be disabled
+      * and ends with GET_MENU_ITEMS:END
+      */
+-    Q_INVOKABLE void command_GET_MENU_ITEMS(const QString &argument, SocketListener *listener);
+ 
+     QString buildRegisterPathMessage(const QString &path);
+ 

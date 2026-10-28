@@ -1,15 +1,11 @@
 diff --git a/src/gui/main.cpp b/src/gui/main.cpp
-index cc007f9..a4581dd 100644
+index cc007f9..b09cf0f 100644
 --- a/src/gui/main.cpp
 +++ b/src/gui/main.cpp
-@@ -14,36 +14,25 @@
-  */
- #include <QtGlobal>
+@@ -16,18 +16,12 @@
  
-+#include <QCoreApplication>
-+
  #include "accountmanager.h"
--#include "common/restartmanager.h"
+ #include "common/restartmanager.h"
 -#include "gui/application.h"
  #include "gui/folderman.h"
 -#include "gui/logbrowser.h"
@@ -23,25 +19,31 @@ index cc007f9..a4581dd 100644
  #include "common/version.h"
 -#include "gui/translations.h"
  #include "libsync/logger.h"
--#include "socketapi/socketapi.h"
+ #include "socketapi/socketapi.h"
  
--#include <kdsingleapplication.h>
- 
- #ifdef WITH_AUTO_UPDATER
+@@ -37,18 +31,18 @@
  #include "updater/updater.h"
  #endif
  
 -#include <QApplication>
++#include <QCoreApplication>
  #include <QCommandLineParser>
  #include <QLibraryInfo>
 -#include <QMessageBox>
--#include <QProcess>
+ #include <QProcess>
  #include <QTimer>
 -#include <QTranslator>
  #ifdef Q_OS_WIN
  #include <qt_windows.h>
  #endif
-@@ -68,13 +57,6 @@ void displayHelpText(const QString &t)
+ 
+ #include <iostream>
++#include <string>
++#include <vector>
+ 
+ using namespace Qt::Literals::StringLiterals;
+ using namespace std::chrono_literals;
+@@ -68,13 +62,6 @@ void displayHelpText(const QString &t)
  {
      Logger::instance()->attacheToConsole();
      std::cout << qUtf8Printable(t) << std::endl;
@@ -55,7 +57,7 @@ index cc007f9..a4581dd 100644
  }
  
  struct CommandLineOptions
-@@ -98,12 +80,12 @@ CommandLineOptions parseOptions(const QStringList &arguments)
+@@ -98,12 +85,12 @@ CommandLineOptions parseOptions(const QStringList &arguments)
      QTextStream descriptionTextStream(&descriptionText);
  
      descriptionTextStream
@@ -71,7 +73,7 @@ index cc007f9..a4581dd 100644
  
      parser.setApplicationDescription(descriptionText);
  
-@@ -121,17 +103,17 @@ CommandLineOptions parseOptions(const QStringList &arguments)
+@@ -121,17 +108,17 @@ CommandLineOptions parseOptions(const QStringList &arguments)
      parser.addOption(showSettingsLegacyOption);
  
      auto showOption = addOption({{QStringLiteral("s"), QStringLiteral("show")},
@@ -97,7 +99,7 @@ index cc007f9..a4581dd 100644
  
      parser.process(arguments);
  
-@@ -147,7 +129,7 @@ CommandLineOptions parseOptions(const QStringList &arguments)
+@@ -147,7 +134,7 @@ CommandLineOptions parseOptions(const QStringList &arguments)
      }
      if (parser.isSet(logDirOption)) {
          if (parser.isSet(logFileOption)) {
@@ -106,10 +108,12 @@ index cc007f9..a4581dd 100644
              std::exit(1);
          }
          out.logDir = parser.value(logDirOption);
-@@ -168,13 +150,10 @@ CommandLineOptions parseOptions(const QStringList &arguments)
+@@ -166,16 +153,6 @@ CommandLineOptions parseOptions(const QStringList &arguments)
+     return out;
+ }
  
- void showDowngradeDialog()
- {
+-void showDowngradeDialog()
+-{
 -    QMessageBox box(QMessageBox::Warning, Resources::JsonTheme::instance().applicationDisplayName(),
 -        QCoreApplication::translate("version check",
 -            "Some settings were configured in newer versions of this client "
@@ -117,20 +121,29 @@ index cc007f9..a4581dd 100644
 -    box.addButton(OCC::Application::tr("Quit"), QMessageBox::AcceptRole);
 -    box.exec();
 -    QTimer::singleShot(0, qApp, &QApplication::quit);
-+    qCWarning(lcMain) << QCoreApplication::translate("version check",
-+        "Some settings were configured in newer versions of this client "
-+        "and use features that are not available in this version");
-+    QTimer::singleShot(0, qApp, &QCoreApplication::quit);
- }
+-}
  
  /**
-@@ -232,225 +211,30 @@ void setupLogging(const CommandLineOptions &options)
-     // Possibly configure logging from config file
-     LogBrowser::setupLoggingFromConfig();
+  * Check if the last version used to write the config file differs from the current version.
+@@ -200,7 +177,6 @@ bool checkClientVersion()
+     // We allow downgrades as long as the major version stays the same.
+     if (clientVersion.majorVersion() < configVersion.majorVersion()) {
+         // We refuse to downgrade, too much can go wrong.
+-        showDowngradeDialog();
+         return false;
+     }
  
+@@ -229,135 +205,36 @@ void setupLogging(const CommandLineOptions &options)
+     }
+     logger->setLogDebug(options.logDebug);
+ 
+-    // Possibly configure logging from config file
+-    LogBrowser::setupLoggingFromConfig();
+-
 -    qCInfo(lcMain) << u"##################" << Resources::JsonTheme::instance().applicationName() << u"locale:" << QLocale::system().name() << u"version:"
+-                   << Theme::instance()->aboutVersions(Theme::VersionFormat::OneLiner);
 +    qCInfo(lcMain) << u"##################" << QCoreApplication::applicationName() << u"locale:" << QLocale::system().name() << u"version:"
-                    << Theme::instance()->aboutVersions(Theme::VersionFormat::OneLiner);
++                   << OCC::Version::displayString();
      qCInfo(lcMain) << u"Arguments:" << qApp->arguments();
  }
  
@@ -151,17 +164,32 @@ index cc007f9..a4581dd 100644
 -
 -    // the user can also set a locale in the settings, so we need to load the config file
 -    const ConfigFile cfg;
--
++} // Anonymous namespace
+ 
 -    // we need to track the enforced language separately, since we need to distinguish between locale-provided
 -    // and user-enforced one below
 -    const QString enforcedLocale = cfg.uiLanguage();
 -    qCDebug(lcMain) << u"Enforced language:" << enforcedLocale;
--
++namespace OCC {
++int init(const QStringList &arguments);
++}
+ 
 -    // note that user-enforced language are prioritized over the theme enforced one
 -    // to make testing easier.
 -    if (!enforcedLocale.isEmpty()) {
 -        uiLanguages.prepend(enforcedLocale);
--    }
++int OCC::init(const QStringList &arguments)
++{
++    // RestartManager and QCoreApplication take argc/argv; init is handed the same
++    // arguments the command line would have passed, so rebuild them here and leave
++    // everything downstream untouched.
++    static std::vector<std::string> argumentStorage;
++    static std::vector<char *> argvStorage;
++    argumentStorage.clear();
++    argvStorage.clear();
++    for (const QString &argument : arguments) {
++        argumentStorage.push_back(argument.toStdString());
+     }
 -
 -    QString displayLanguage;
 -
@@ -247,56 +275,28 @@ index cc007f9..a4581dd 100644
 -        } else {
 -            translator->deleteLater();
 -        }
--    }
--
++    for (std::string &argument : argumentStorage) {
++        argvStorage.push_back(argument.data());
+     }
++    argvStorage.push_back(nullptr);
++    int argc = static_cast<int>(argumentStorage.size());
++    char **argv = argvStorage.data();
+ 
 -    return displayLanguage;
 -}
- } // Anonymous namespace
- 
+-} // Anonymous namespace
+-
 -int main(int argc, char **argv)
-+int OCC::init(const QStringList &arguments)
- {
--    return RestartManager([](int argc, char **argv) {
--        // when called with --cmd we run the cmd client in a sub process and forward everything
--        if (argc > 1 && argv[1] == QByteArrayLiteral("--cmd")) {
--#ifdef Q_OS_WIN
--            // On Windows ui applications don't have console access by default
--            // We can't use our normal workaround to attach to the parent console as it breaks the stdin handling.
--            // Therefore, we create a new console and redirect our streams.
--            AllocConsole();
--            freopen("CONIN$", "r", stdin);
--            freopen("CONOUT$", "w", stdout);
--            freopen("CONOUT$", "w", stderr);
--#endif
--            QCoreApplication cmdApp(argc, argv);
--            QProcess cmd;
--            cmd.setProcessChannelMode(QProcess::ForwardedChannels);
--            cmd.setInputChannelMode(QProcess::ForwardedInputChannel);
--
--            const QString app = []() -> QString {
--#ifdef Q_OS_WIN
--                return QCoreApplication::applicationFilePath().chopped(4) + QStringLiteral("cmd.exe");
--#else
--                return QCoreApplication::applicationFilePath() + QStringLiteral("cmd");
--#endif
--            }();
--            cmd.start(app, cmdApp.arguments().mid(2));
--            if (!cmd.waitForFinished(-1)) {
--                std::cout << "Failed to start" << qPrintable(cmd.program()) << std::endl;
--            }
--#ifdef Q_OS_WIN
--            // readline to keep the console window open until closed by the user
--            std::string dummy;
--            std::cout << "Press enter to close";
--            std::getline(std::cin, dummy);
--#endif
--            return cmd.exitCode();
--        }
--
--        // load the resources
+-{
+     return RestartManager([](int argc, char **argv) {
+         // when called with --cmd we run the cmd client in a sub process and forward everything
+         if (argc > 1 && argv[1] == QByteArrayLiteral("--cmd")) {
+@@ -396,42 +273,20 @@ int main(int argc, char **argv)
+         }
+ 
+         // load the resources
 -        const OCC::ResourcesLoader resource;
 -
-+    {
          // Create a `Platform` instance so it can set-up/tear-down stuff for us, and do any
          // initialisation that needs to be done before creating a QApplication
 -        const auto platform = Platform::create(Platform::Type::Gui);
@@ -304,7 +304,8 @@ index cc007f9..a4581dd 100644
  
          // Create the (Q)Application instance:
 -        QApplication app(argc, argv);
--
++        QCoreApplication app(argc, argv);
+ 
 -        // this might change the application name etc
 -        if (auto result = Resources::JsonTheme::instance().loadSystemTheme()) {
 -            std::cerr << "Failed to load system theme: " << qPrintable(result.value()) << std::endl;
@@ -326,41 +327,18 @@ index cc007f9..a4581dd 100644
 -
 -        // Load the translations before option parsing, so we can localize help text and error messages.
 -        const QString displayLanguage = setupTranslations(&app);
-+        static int argc = 1;
-+        static char name[] = "openvfs-rb";
-+        static char *argv[] = {name, nullptr};
-+        QCoreApplication app(argc, argv);
 +        app.setApplicationVersion(Version::displayString());
  
          // parse the arguments before we handle singleApplication
          // errors and help/version need to be handled in this instance
--        const auto options = parseOptions(app.arguments());
--
--        KDSingleApplication singleApplication(Resources::JsonTheme::instance().organizationDomain());
--
--        if (!singleApplication.isPrimaryInstance()) {
--            // if the application is already running, notify it.
--            qCInfo(lcMain) << u"Already running, exiting...";
--            if (app.isSessionRestored()) {
--                // This call is mirrored with the one in Application::slotParseMessage
--                qCInfo(lcMain) << u"Session was restored, don't notify app!";
--                return -1;
--            }
--
--            QStringList args = app.arguments();
--            if (args.size() > 1) {
--                QString msg = args.join(QLatin1String("|"));
--                if (!singleApplication.sendMessage((msgParseOptionsC() + msg).toUtf8()))
--                    return -1;
--            }
--
--            return 0;
--        }
-+        const auto options = parseOptions(arguments);
+         const auto options = parseOptions(app.arguments());
  
-         // Check if the user upgraded or downgraded. We do this as early as possible, to detect
-         // a possible downgrade.
-@@ -467,10 +251,6 @@ int main(int argc, char **argv)
+-        KDSingleApplication singleApplication(Resources::JsonTheme::instance().organizationDomain());
++        KDSingleApplication singleApplication(QCoreApplication::organizationDomain());
+ 
+         if (!singleApplication.isPrimaryInstance()) {
+             // if the application is already running, notify it.
+@@ -467,10 +322,6 @@ int main(int argc, char **argv)
  
          if (!AccountManager::instance()->restore()) {
              qCCritical(lcMain) << u"Could not read the account settings, quitting";
@@ -371,12 +349,11 @@ index cc007f9..a4581dd 100644
              return -1;
          }
  
-@@ -479,56 +259,17 @@ int main(int argc, char **argv)
+@@ -479,29 +330,9 @@ int main(int argc, char **argv)
          // the dialog is not shown.
          if (!FolderMan::instance()->loadFolders().has_value()) {
              // Empty return value: there was a downgrade detected on one of the databases
 -            showDowngradeDialog();
-+            qCCritical(lcMain) << u"Database downgrade detected, quitting";
              return -1;
          }
  
@@ -401,15 +378,8 @@ index cc007f9..a4581dd 100644
 -
          platform->startServices();
  
--#ifdef WITH_AUTO_UPDATER
--        if (Updater::instance()) {
--            // validate whether the last update was successful.
--            Updater::instance()->validateUpdate();
--        }
--#endif
--
-         // Enable syncing. We cannot do this earlier, because the UI needs to be set up in order to
-         // show sync errors. We also want to wait for the auto-updater to finish, in case it needs
+ #ifdef WITH_AUTO_UPDATER
+@@ -516,14 +347,11 @@ int main(int argc, char **argv)
          // to install an update.
          folderManager->setSyncEnabled(true);
  
@@ -419,14 +389,12 @@ index cc007f9..a4581dd 100644
 -        }
 -
 -        // Display the wizard if we don't have an account yet, and no other UI is showing.
--        if (AccountManager::instance()->accounts().isEmpty()) {
++        // Upstream opens the new-account wizard here. There is no wizard without a UI,
++        // so a missing account is fatal: configure one first.
+         if (AccountManager::instance()->accounts().isEmpty()) {
 -            QTimer::singleShot(0, ocApp.get(), &Application::runNewAccountWizard);
--        }
--
--        // Now that everything is up and running, start accepting connections/requests from the shell integration.
--        folderManager->socketApi()->startShellIntegration();
--
-         return app.exec();
--    }).exec(argc, argv);
-+    }
- }
++            qCCritical(lcMain) << u"No account is configured";
++            return -1;
+         }
+ 
+         // Now that everything is up and running, start accepting connections/requests from the shell integration.

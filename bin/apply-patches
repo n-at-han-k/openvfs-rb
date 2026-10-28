@@ -1,54 +1,17 @@
-#!/usr/bin/env ruby
-# frozen_string_literal: true
+#!/bin/sh
+# nix/patches/ -> submodule working tree. Skips patches already applied, so staged and
+# unstaged work is left alone.
+set -e
+cd "$(dirname "$0")/.."
 
-# Applies nix/patches/ to the opencloud-desktop submodule so the patched sources can be edited directly. Run bin/extract-patches afterwards to turn those edits back into patch files.
-
-require "pathname"
-
-ROOT = Pathname.new(__dir__).parent
-SUBMODULE = ROOT / "opencloud-desktop"
-PATCHES = ROOT / "nix" / "patches"
-
-def abort_unless_clean
-  status = `git -C #{SUBMODULE} status --porcelain`
-  if status.empty?
-    nil
-  else
-    warn "opencloud-desktop has local changes; commit, stash or reset them first:"
-    warn status
-    exit 1
-  end
-end
-
-def patch_files = Dir.glob("**/*.patch", base: PATCHES).sort
-
-unless SUBMODULE.join(".git").exist?
-  abort "opencloud-desktop is not checked out; run: git submodule update --init"
-end
-
-abort_unless_clean
-
-patches = patch_files
-if patches.empty?
-  abort "no patches in #{PATCHES.relative_path_from(ROOT)}"
-end
-
-failed = []
-patches.each do |patch|
-  target = patch.delete_suffix(".patch")
-  ok = system("git", "-C", SUBMODULE.to_s, "apply", (PATCHES / patch).to_s)
-  if ok
-    puts "applied  #{target}"
-  else
-    failed << target
-  end
-end
-
-unless failed.empty?
-  warn "\nfailed to apply:"
-  failed.each {|target| warn "  #{target}"}
-  exit 1
-end
-
-puts "\n#{patches.size} patches applied to opencloud-desktop; edit the sources there, " \
-     "then run bin/extract-patches"
+find nix/patches -name '*.patch' | sort | while read -r patch; do
+	file=${patch#nix/patches/}
+	file=${file%.patch}
+	if git -C opencloud-desktop apply --reverse --check "../$patch" 2>/dev/null; then
+		echo "already  $file"
+	elif git -C opencloud-desktop apply "../$patch"; then
+		echo "applied  $file"
+	else
+		echo "FAILED   $file" >&2
+	fi
+done

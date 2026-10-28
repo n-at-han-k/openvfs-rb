@@ -1,0 +1,16 @@
+#!/bin/sh
+# Points the flake input and the submodule at the same commit of OpenCloud Desktop.
+set -e
+cd "$(dirname "$0")/.."
+
+commit=$1
+[ -n "$commit" ] || { echo "usage: bin/set-commit <commit>" >&2; exit 1; }
+
+git -C opencloud-desktop fetch --depth 1 origin "$commit"
+git -C opencloud-desktop checkout --detach "$commit"
+
+sed -i "s|url = \"github:opencloud-eu/desktop[^\"]*\";|url = \"github:opencloud-eu/desktop/$commit\";|" flake.nix
+nix flake update desktop
+
+echo "submodule  $(git -C opencloud-desktop rev-parse HEAD)"
+echo "flake.lock $(sed -n 's/.*"rev": "\([a-f0-9]*\)".*/\1/p' flake.lock | head -1)"

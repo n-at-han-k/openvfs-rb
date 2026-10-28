@@ -1,12 +1,13 @@
 diff --git a/src/libsync/platform.cpp b/src/libsync/platform.cpp
-index 363e4af..ddbfd2b 100644
+index 363e4af..e571f55 100644
 --- a/src/libsync/platform.cpp
 +++ b/src/libsync/platform.cpp
-@@ -32,7 +32,6 @@
+@@ -32,8 +32,6 @@
  #include <libcrashreporter-handler/Handler.h>
  #endif
  
 -#include <QApplication>
- #include <QFontDatabase>
+-#include <QFontDatabase>
  
  namespace OCC {
+ 
