@@ -1,12 +1,12 @@
 #!/bin/sh
-# Submodule working tree -> nix/patches/, one patch per changed file. Read-only on the
+# Submodule working tree -> patches/, one patch per changed file. Read-only on the
 # submodule; diffs against HEAD so staged changes are included.
 set -e
 cd "$(dirname "$0")/.."
 
-rm -rf nix/patches
+rm -rf patches
 git -C opencloud-desktop diff HEAD --name-only | while read -r file; do
-	mkdir -p "nix/patches/$(dirname "$file")"
-	git -C opencloud-desktop diff HEAD -- "$file" > "nix/patches/$file.patch"
+	mkdir -p "patches/$(dirname "$file")"
+	git -C opencloud-desktop diff HEAD -- "$file" > "patches/$file.patch"
 	echo "$file"
 done

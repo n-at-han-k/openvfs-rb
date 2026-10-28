@@ -1,0 +1,30 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index cb68fdf..abde8d3 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -26,9 +26,8 @@ include(ECMSetupVersion)
+ 
+ include(KDECompilerSettings NO_POLICY_SCOPE)
+ include(ECMEnableSanitizers)
+-include(ECMQmlModule)
+ 
+-find_package(Qt6 COMPONENTS Core Concurrent Network Widgets Xml Quick QuickWidgets QuickControls2 Linguist REQUIRED)
++find_package(Qt6 COMPONENTS Core Concurrent Network Xml REQUIRED)
+ qt6_standard_project_setup(REQUIRES 6.8)
+ 
+ 
+@@ -169,14 +168,4 @@ else()
+     message(WARNING "ECM ${ECM_VERSION} too old, cannot install clang-format git hook")
+ endif()
+ 
+-# Target to generate the base translation file with all translatable strings (translations/desktop_en.ts)
+-add_custom_target(update_translations
+-    COMMAND ${CMAKE_COMMAND}
+-        -DLUPDATE=$<TARGET_FILE:Qt::lupdate>
+-        -DTS_FILE=${CMAKE_SOURCE_DIR}/translations/desktop_en.ts
+-        -DSRC_DIR=${CMAKE_SOURCE_DIR}
+-        -DWAE=FALSE
+-        -P ${CMAKE_SOURCE_DIR}/cmake/run_lupdate.cmake
+-)
+-
+ feature_summary(WHAT ALL FATAL_ON_MISSING_REQUIRED_PACKAGES INCLUDE_QUIET_PACKAGES)

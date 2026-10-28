@@ -1,11 +1,11 @@
 #!/bin/sh
-# nix/patches/ -> submodule working tree. Skips patches already applied, so staged and
+# patches/ -> submodule working tree. Skips patches already applied, so staged and
 # unstaged work is left alone.
 set -e
 cd "$(dirname "$0")/.."
 
-find nix/patches -name '*.patch' | sort | while read -r patch; do
-	file=${patch#nix/patches/}
+find patches -name '*.patch' | sort | while read -r patch; do
+	file=${patch#patches/}
 	file=${file%.patch}
 	if git -C opencloud-desktop apply --reverse --check "../$patch" 2>/dev/null; then
 		echo "already  $file"

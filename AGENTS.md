@@ -46,8 +46,8 @@ there is no feature flag, and no `#ifdef` should be added to carry one.
 
 ### Never edit the patch files directly
 
-`nix/patches/` is generated output. It mirrors the submodule's layout, one patch per source file
-(`nix/patches/src/gui/folder.cpp.patch` patches `src/gui/folder.cpp`), and it is rewritten wholesale
+`patches/` is generated output. It mirrors the submodule's layout, one patch per source file
+(`patches/src/gui/folder.cpp.patch` patches `src/gui/folder.cpp`), and it is rewritten wholesale
 every time the patches are extracted. Hand-written hunks carry hand-counted `@@` line numbers, which
 go stale the moment anything above them shifts and fail the build with `malformed patch`.
 
