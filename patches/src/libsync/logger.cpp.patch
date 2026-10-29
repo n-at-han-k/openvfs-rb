@@ -1,19 +1,22 @@
 diff --git a/src/libsync/logger.cpp b/src/libsync/logger.cpp
-index f146146..b0255d2 100644
+index f146146..497c967 100644
 --- a/src/libsync/logger.cpp
 +++ b/src/libsync/logger.cpp
-@@ -13,8 +13,9 @@
+@@ -13,8 +13,12 @@
   */
  
  #include "logger.h"
 +
 +#include "common/version.h"
++// For Utility::crash, which only the Q_OS_WIN branch of doLog calls, so no other
++// platform has ever needed the declaration here.
++#include "common/utility.h"
  #include "configfile.h"
 -#include "theme.h"
  
  #include <QCoreApplication>
  #include <QtConcurrent>
-@@ -39,7 +40,7 @@ constexpr int minLogsToKeepC = 5;
+@@ -39,7 +43,7 @@ constexpr int minLogsToKeepC = 5;
  
  QString logHeader()
  {
