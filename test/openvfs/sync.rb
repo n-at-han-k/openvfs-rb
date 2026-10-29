@@ -8,13 +8,10 @@ require "securerandom"
 require "tmpdir"
 require "uri"
 
-# Configure a sync folder, start the client, and check that a file dropped into the
-# folder reaches the server.
+# Configure a sync folder, start the client, and check that a file dropped into the folder reaches the server.
 #
-# This is what the bindings exist for, so it is also the specification of what
-# flake.nix has to build: whatever this needs is in scope, whatever it does
-# not need gets patched out.
-describe OpenVFS::OCC do
+# This is what the bindings exist for, so it is also the specification of what flake.nix has to build: whatever this needs is in scope, whatever it does not need gets patched out.
+describe OpenVFS do
   SERVER = ENV.fetch("OPENCLOUD_URL", "http://127.0.0.1:18280")
   USER = ENV.fetch("OPENCLOUD_USER", "admin")
   PASSWORD = ENV.fetch("OPENCLOUD_PASSWORD", "openvfs-rb-test-admin")
@@ -36,26 +33,25 @@ describe OpenVFS::OCC do
     uri = URI.parse("#{dav_root}/#{name}")
     request = Net::HTTP::Get.new(uri.request_uri)
     request["Authorization"] = basic_auth
-    Net::HTTP.start(uri.host, uri.port) { |http| http.request(request) }
+    Net::HTTP.start(uri.host, uri.port) {|http| http.request(request) }
   end
 
   it "uploads a file that appears in a configured folder" do
     skip "no OpenCloud server at #{SERVER}; run docker compose up -d" unless server_up?
 
     Dir.mktmpdir("openvfs-sync") do |local|
-      uuid = OpenVFS::OCC.configure(local, url: SERVER, remote_path: dav_root)
+      uuid = OpenVFS.configure(local, url: SERVER, remote_path: dav_root)
 
       # Credentials live in the keychain, keyed by the account.
-      account = OpenVFS::OCC::AccountPtr.create(uuid)
-      account.get.url = SERVER
-      job = account.get.credential_manager.set("http/oauthtoken", basic_auth)
-      job.start
-      expect(account.get.credential_manager.contains?("http/oauthtoken")).to be == true
+      account = OpenVFS::Account.create(uuid)
+      account.url = SERVER
+      account.credential_manager.set("http/oauthtoken", basic_auth)
+      expect(account.credential_manager.contains?("http/oauthtoken")).to be == true
 
       # start runs the client's own event loop, so it has to be its own process.
       client = fork do
         $stdout.reopen(File::NULL)
-        OpenVFS::OCC.start(["--logfile", "-"])
+        OpenVFS.start(["--logfile", "-"])
       end
 
       name = "watched-#{SecureRandom.hex(4)}.txt"
