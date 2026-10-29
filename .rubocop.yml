@@ -149,6 +149,10 @@ Nathank/CommentStructure:
   Wrapping:
     Enabled: true
 
+    # The scripts under bin/ carry man-page headers, whose NAME, SYNOPSIS and DESCRIPTION are wrapped because that is the format.
+    Exclude:
+      - "bin/**"
+
   Length:
     Enabled: true
 
