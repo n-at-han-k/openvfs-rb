@@ -7,10 +7,11 @@ on:
 permissions:
   contents: read
 
-# One group shared with the other workflows, so a new push cancels whatever the
-# previous one still has running instead of queueing another full matrix behind it.
+# Keyed by workflow as well as ref: a new push cancels this workflow's own previous
+# run rather than queueing another behind it. Sharing one group across workflows
+# instead makes the two runs of a single push cancel each other.
 concurrency:
-  group: openvfs-rb-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
