@@ -66,6 +66,10 @@ require "fileutils"
 require "json"
 require "open3"
 require "rubygems/package"
+require "yaml"
+
+# abort writes to stderr while stdout is block-buffered down a pipe, which otherwise prints the reason above the progress it followed.
+$stdout.sync = true
 
 root = File.expand_path("..", __dir__)
 Dir.chdir(root)
@@ -132,10 +136,25 @@ run_sha = runs.first.fetch("headSha")
 
 puts "Run #{run_id} built #{run_sha[0, 7]}"
 
-# The objects carry no version, so the only thing tying them to this release is the commit they were built from.
+# The objects carry no version, so what ties them to this release is the commit they were built from. Requiring that commit to be HEAD is too strict: the workflow only runs for the paths it builds from, so a commit touching none of them - a changelog, a .gitignore - would never get a run of its own and could never be released. What matters is that nothing the objects are built from has moved since, and the workflow's own paths filter is the list of what that is.
 unless run_sha == head
-  abort "ERROR: the latest successful run built #{run_sha[0, 7]}, but HEAD is #{head[0, 7]}.\n" \
-        "Push #{local_version} to main, wait for cross-compile to finish, then re-run."
+  unless system("git", "merge-base", "--is-ancestor", run_sha, head)
+    abort "ERROR: run #{run_id} built #{run_sha[0, 7]}, which is not an ancestor of HEAD (#{head[0, 7]}).\n" \
+          "Push #{local_version} to main, wait for cross-compile to finish, then re-run."
+  end
+
+  triggers = YAML.safe_load(File.read(".github/workflows/#{workflow}")).dig(true, "push", "paths") || []
+  changed = `git diff --name-only #{run_sha} #{head}`.lines.map(&:strip).reject(&:empty?)
+  stale = changed.select do |path|
+    triggers.any?{|pattern| File.fnmatch?(pattern, path, File::FNM_DOTMATCH)}
+  end
+
+  unless stale.empty?
+    abort "ERROR: run #{run_id} built #{run_sha[0, 7]}, and #{stale.join(', ')} changed since.\n" \
+          "Those are inputs to the objects, so push and wait for cross-compile before releasing."
+  end
+
+  puts "  #{changed.size} file(s) changed since, none of them inputs to the objects"
 end
 
 puts "\nBuilding source gem from #{gemspec}..."
