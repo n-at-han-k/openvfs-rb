@@ -98,15 +98,15 @@ COMPILED_RUBY_ABI = "3.4"
 
 puts "Local version: #{local_version}"
 
-# The local version has to be ahead of what is published, which is the one mistake that cannot be taken back: a pushed version is pushed.
+# The local version cannot be behind what is published: a pushed version is pushed, and this is the one mistake that cannot be taken back. Equal is the resume case - the per-gem push below treats "has already been pushed" as a skip, so a release which died part way through can be re-run against the same version.
 remote_output = `gem specification #{gem_name} version --remote 2>&1`
 
 if $?.success?
   remote_version = remote_output[/version: (.+)/, 1]&.strip
   puts "Remote version: #{remote_version}"
 
-  if Gem::Version.new(local_version) <= Gem::Version.new(remote_version)
-    abort "ERROR: Local version (#{local_version}) has not been incremented past remote (#{remote_version})"
+  if Gem::Version.new(local_version) < Gem::Version.new(remote_version)
+    abort "ERROR: Local version (#{local_version}) is behind remote (#{remote_version})"
   end
 else
   puts "Gem not yet published remotely, proceeding with first release"
