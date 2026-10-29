@@ -7,6 +7,12 @@ on:
 permissions:
   contents: read
 
+# One group shared with the other workflows, so a new push cancels whatever the
+# previous one still has running instead of queueing another full matrix behind it.
+concurrency:
+  group: openvfs-rb-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest

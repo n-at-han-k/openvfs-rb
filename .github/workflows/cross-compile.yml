@@ -38,6 +38,12 @@ on:
 permissions:
   contents: read
 
+# One group shared with the other workflows, so a new push cancels whatever the
+# previous one still has running instead of queueing another full matrix behind it.
+concurrency:
+  group: openvfs-rb-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ci-data:
     name: Fetch the supported platforms and Ruby versions
@@ -89,7 +95,12 @@ jobs:
           drv=$(nix eval --raw ".#devShells.$system.default.drvPath")
           echo "key=$(basename "$drv" .drv)" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/cache@v4
+      # restore/save rather than actions/cache, whose post step only saves when the
+      # job succeeded. A job that builds the static library and then fails compiling
+      # the extension has done the expensive half of the work, and throwing that away
+      # is what makes every iteration pay the full C++ build again.
+      - uses: actions/cache/restore@v4
+        id: cache
         with:
           path: ~/nix-binary-cache
           key: nix-ours-${{ matrix.platform }}-${{ steps.drv.outputs.key }}
@@ -115,10 +126,20 @@ jobs:
       - name: Run the suite
         run: nix develop --command bundle exec sus
 
+      # Each is copied on its own so one that was never built does not stop the rest
+      # being cached: on a failed run some of them exist and some do not.
       - name: Save our derivations to the binary cache
+        if: ${{ !cancelled() }}
         run: |
-          nix copy --to "file://$HOME/nix-binary-cache" \
-            .#desktop-upload .#openvfs .#libre-graph-api .#gems .#wrapped-ruby
+          for pkg in desktop-upload openvfs libre-graph-api gems wrapped-ruby; do
+            nix copy --to "file://$HOME/nix-binary-cache" ".#$pkg" || echo "skipped $pkg"
+          done
+
+      - uses: actions/cache/save@v4
+        if: ${{ !cancelled() && steps.cache.outputs.cache-hit != 'true' }}
+        with:
+          path: ~/nix-binary-cache
+          key: nix-ours-${{ matrix.platform }}-${{ steps.drv.outputs.key }}
 
       - uses: actions/upload-artifact@v4
         with:
