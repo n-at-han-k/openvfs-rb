@@ -68,7 +68,7 @@
           meta = {
             description = "OpenCloud Desktop's account and streaming PUT upload jobs";
             license = pkgs.lib.licenses.gpl2Plus;
-            platforms = pkgs.lib.platforms.linux;
+            platforms = pkgs.lib.platforms.linux ++ pkgs.lib.platforms.darwin;
           };
         };
 
