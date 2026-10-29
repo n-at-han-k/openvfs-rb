@@ -7,13 +7,7 @@
 // is_convertible returns a double score, matching Rice 4.12.0's own converters in
 // stl.hpp; Rice's published docs still describe an older enum form.
 
-// rice.hpp uses std::exception_ptr, std::sort and std::count_if without including the headers that define them. libstdc++ happens to pull them in anyway; libc++ does not, so on clang exception_ptr is incomplete and the algorithms are missing unless these come first.
-#include <algorithm>
-#include <exception>
-
-#include <rice/rice.hpp>
-#include <rice/stl.hpp>
-
+// Qt comes before Ruby, and the order is load-bearing on Windows: ruby.h defines truncate and access as macros onto its own win32 replacements, and Qt's headers stop with an #error rather than be parsed after that.
 #include <libsync/account.h>
 #include <libsync/creds/credentialmanager.h>
 
@@ -27,6 +21,13 @@
 #include <QTimer>
 #include <QUuid>
 #include <QVariant>
+
+// rice.hpp uses std::exception_ptr, std::sort and std::count_if without including the headers that define them. libstdc++ happens to pull them in anyway; libc++ does not, so on clang exception_ptr is incomplete and the algorithms are missing unless these come first.
+#include <algorithm>
+#include <exception>
+
+#include <rice/rice.hpp>
+#include <rice/stl.hpp>
 
 #include <memory>
 
