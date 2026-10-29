@@ -2,9 +2,9 @@
 
 require "openvfs/occ"
 
-require "json"
 require "net/http"
 require "securerandom"
+require "time"
 require "tmpdir"
 require "uri"
 
@@ -33,7 +33,7 @@ describe OpenVFS do
     uri = URI.parse("#{dav_root}/#{name}")
     request = Net::HTTP::Get.new(uri.request_uri)
     request["Authorization"] = basic_auth
-    Net::HTTP.start(uri.host, uri.port) {|http| http.request(request) }
+    Net::HTTP.start(uri.host, uri.port) { |http| http.request(request) }
   end
 
   it "uploads a file that appears in a configured folder" do
