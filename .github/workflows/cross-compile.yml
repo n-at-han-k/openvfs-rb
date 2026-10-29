@@ -181,6 +181,18 @@ jobs:
         shell: bash
         run: bin/apply-patches
 
+      # The build tree, not the install prefix: ninja then recompiles only the files a
+      # patch actually changed instead of all 80 again. The runner's workspace path is
+      # stable, so the absolute paths in CMakeCache stay valid between runs.
+      - uses: actions/cache/restore@v4
+        id: cache
+        with:
+          path: build/desktop-upload
+          key: desktop-upload-${{ matrix.platform }}-${{ hashFiles('patches/**') }}-${{ github.sha }}
+          restore-keys: |
+            desktop-upload-${{ matrix.platform }}-${{ hashFiles('patches/**') }}-
+            desktop-upload-${{ matrix.platform }}-
+
       - name: Build the trimmed desktop static library
         shell: pwsh
         run: |
@@ -212,6 +224,14 @@ jobs:
       - name: Load the extension
         shell: pwsh
         run: ruby -Ilib -Iext -e 'require "openvfs/occ"; puts OpenVFS::VERSION'
+
+      # Saved even when a later step failed: the object files already compiled are
+      # exactly what makes the next attempt quick.
+      - uses: actions/cache/save@v4
+        if: ${{ !cancelled() }}
+        with:
+          path: build/desktop-upload
+          key: desktop-upload-${{ matrix.platform }}-${{ hashFiles('patches/**') }}-${{ github.sha }}
 
       - uses: actions/upload-artifact@v4
         with:
