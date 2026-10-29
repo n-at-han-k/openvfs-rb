@@ -1,13 +1,46 @@
 diff --git a/src/libsync/common/utility_win.h b/src/libsync/common/utility_win.h
-index 9bbc5b9..8437097 100644
+index 9bbc5b9..da6f0eb 100644
 --- a/src/libsync/common/utility_win.h
 +++ b/src/libsync/common/utility_win.h
-@@ -43,7 +43,7 @@ namespace Utility {
-             bool followSymlinks = true;
-             bool async = false;
-         };
--        static Handle createHandle(const std::filesystem::path &path, const CreateHandleParameter &p = {}, std::function<void(HANDLE)> &&close = CloseHandle);
-+        static Handle createHandle(const std::filesystem::path &path, const CreateHandleParameter &p = CreateHandleParameter{}, std::function<void(HANDLE)> &&close = CloseHandle);
+@@ -25,9 +25,26 @@
+ 
+ namespace OCC {
+ namespace Utility {
++    // Hoisted out of Handle: a default function argument and a default member
++    // initializer are both complete-class contexts, and neither may use the other, so
++    // GCC rejects `p = {}` while it is a nested struct. MSVC, which upstream builds
++    // Windows with, accepts it. At namespace scope the initializers are already
++    // complete by the time Handle is parsed.
++    struct CreateHandleParameter
++    {
++        uint32_t accessMode = 0;
++        uint32_t shareMode = FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE;
++        uint32_t creationFlags = OPEN_EXISTING;
++        bool followSymlinks = true;
++        bool async = false;
++    };
++
+     class OPENCLOUD_SYNC_EXPORT Handle
+     {
+     public:
++        // Keeps Handle::CreateHandleParameter naming the same type for callers.
++        using CreateHandleParameter = ::OCC::Utility::CreateHandleParameter;
++
+         /**
+          * A RAAI for Windows Handles
+          */
+@@ -35,14 +52,6 @@ namespace Utility {
+         explicit Handle(HANDLE h, const std::filesystem::path &path);
+         explicit Handle(HANDLE h, const std::filesystem::path &path, std::function<void(HANDLE)> &&close, uint32_t error = NO_ERROR);
+ 
+-        struct CreateHandleParameter
+-        {
+-            uint32_t accessMode = 0;
+-            uint32_t shareMode = FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE;
+-            uint32_t creationFlags = OPEN_EXISTING;
+-            bool followSymlinks = true;
+-            bool async = false;
+-        };
+         static Handle createHandle(const std::filesystem::path &path, const CreateHandleParameter &p = {}, std::function<void(HANDLE)> &&close = CloseHandle);
  
          Handle(const Handle &) = delete;
-         Handle &operator=(const Handle &) = delete;
