@@ -1,0 +1,13 @@
+diff --git a/src/libsync/common/utility_win.h b/src/libsync/common/utility_win.h
+index 9bbc5b9..8437097 100644
+--- a/src/libsync/common/utility_win.h
++++ b/src/libsync/common/utility_win.h
+@@ -43,7 +43,7 @@ namespace Utility {
+             bool followSymlinks = true;
+             bool async = false;
+         };
+-        static Handle createHandle(const std::filesystem::path &path, const CreateHandleParameter &p = {}, std::function<void(HANDLE)> &&close = CloseHandle);
++        static Handle createHandle(const std::filesystem::path &path, const CreateHandleParameter &p = CreateHandleParameter{}, std::function<void(HANDLE)> &&close = CloseHandle);
+ 
+         Handle(const Handle &) = delete;
+         Handle &operator=(const Handle &) = delete;
