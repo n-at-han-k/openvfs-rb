@@ -3,7 +3,7 @@
 # Released under the MIT License.
 # Copyright, 2026, by Nathan Kidd.
 
-version = File.read(File.expand_path("lib/openvfs/version.rb", __dir__))[/VERSION = "([^"]+)"/, 1]
+version = File.read(File.expand_path("lib/openvfs/rb/version.rb", __dir__))[/VERSION = "([^"]+)"/, 1]
 
 Gem::Specification.new do |spec|
   spec.name = "openvfs-rb"

@@ -23,7 +23,7 @@ group :lint do
 end
 
 group :release do
-  gem "gem_kit-release"
+  gem "gem_kit-release", "~> 0.3"
 end
 
 group :development do

@@ -1,5 +1,5 @@
 PATH
-  remote: .
+  remote: ../../../nix/store/x3dv9p9f1la7myqf8136212vy7ayf3vf-gemfile-and-lockfile
   specs:
     openvfs-rb (0.1.0)
       gem_kit (~> 0.2)

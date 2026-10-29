@@ -109,9 +109,10 @@
         # The gemspec parses lib/openvfs/version.rb rather than requiring it, so only the
         # gemspec itself is copied and no second copy of the library reaches the load path.
         gemspecFiles = pkgs.runCommand "openvfs-rb-gemspec" { } ''
-          mkdir -p $out/lib/openvfs
-          cp ${./openvfs-rb.gemspec}      $out/openvfs-rb.gemspec
-          cp ${./lib/openvfs/version.rb}  $out/lib/openvfs/version.rb
+          mkdir -p $out/lib/openvfs/rb
+          cp ${./openvfs-rb.gemspec}            $out/openvfs-rb.gemspec
+          cp ${./lib/openvfs/rb/version.rb}     $out/lib/openvfs/rb/version.rb
+          cp ${./lib/openvfs/version.rb}        $out/lib/openvfs/version.rb
         '';
 
         gems = pkgs.bundlerEnv {

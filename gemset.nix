@@ -202,7 +202,7 @@
     groups = ["default"];
     platforms = [];
     source = {
-      path = ./.;
+      path = ../../../nix/store/x3dv9p9f1la7myqf8136212vy7ayf3vf-gemfile-and-lockfile;
       type = "path";
     };
     version = "0.1.0";

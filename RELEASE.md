@@ -3,7 +3,7 @@
 The whole process, in order:
 
 ```sh
-bundle exec sus               # 1. green suite
+bin/test                      # 1. green suite
 gem kit bump minor            # 2. bump  (prints what to run next)
 gem kit changelog --write     # 3. write the entry
 gem kit changelog <VERSION>   # 4. check it
@@ -17,7 +17,7 @@ Everything below is what they check and why.
 ## Versioning
 
 openvfs-rb is [semver](https://semver.org/). The version lives in one place —
-`lib/openvfs/version.rb` — and is only ever changed by `gem kit bump`.
+`lib/openvfs/rb/version.rb` — and is only ever changed by `gem kit bump`.
 
 | Segment | When | What it may contain |
 | --- | --- | --- |
@@ -36,7 +36,7 @@ Two rules follow from this, and both are enforced in code:
 ## 1. Green suite
 
 ```sh
-nix develop --command bundle exec sus
+bin/test
 ```
 
 A red suite is not a release candidate; nothing downstream checks this for you.
@@ -47,7 +47,7 @@ A red suite is not a release candidate; nothing downstream checks this for you.
 gem kit bump <major|minor|patch>
 ```
 
-Rewrites `lib/openvfs/version.rb` — by rendering its `.erb` template if there is
+Rewrites `lib/openvfs/rb/version.rb` — by rendering its `.erb` template if there is
 one, otherwise by substituting the version literal in place — and prints the
 transition:
 
@@ -81,7 +81,7 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/):
 ```md
 ## [Unreleased]
 
-## [0.1.0] - 2026-10-16
+## [0.1.0] - 2026-10-29
 
 ### Added
 
