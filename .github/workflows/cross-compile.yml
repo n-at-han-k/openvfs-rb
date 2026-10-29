@@ -84,38 +84,29 @@ jobs:
         with:
           submodules: recursive
 
+      # Restored before nix is installed so it can be wired in as a substituter below.
+      # Keyed on the files that decide what gets built, which is computable without
+      # nix: an installable's store path is not knowable until nix has evaluated it.
+      # restore/save rather than actions/cache, whose post step only saves when the job
+      # succeeded - a job that builds the static library and then fails compiling the
+      # extension has done the expensive half of the work.
+      - uses: actions/cache/restore@v4
+        id: cache
+        with:
+          path: ${{ runner.temp }}/nix-binary-cache
+          key: nix-ours-${{ matrix.platform }}-${{ hashFiles('flake.lock', 'flake.nix', 'gemset.nix', 'patches/**') }}
+          restore-keys: nix-ours-${{ matrix.platform }}-
+
+      # As a substituter, not an explicit `nix copy --from`: that takes an installable,
+      # so nix realises it, and a path the cache does not have is built rather than
+      # skipped. A substituter is consulted for every path nix wants, which is the
+      # whole point. require-sigs because the cache is one we wrote and never signed.
       - uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
             experimental-features = nix-command flakes
-
-      - name: Resolve the dev shell derivation
-        id: drv
-        run: |
-          system=$(nix eval --raw --impure --expr builtins.currentSystem)
-          drv=$(nix eval --raw ".#devShells.$system.default.drvPath")
-          echo "key=$(basename "$drv" .drv)" >> "$GITHUB_OUTPUT"
-
-      # restore/save rather than actions/cache, whose post step only saves when the
-      # job succeeded. A job that builds the static library and then fails compiling
-      # the extension has done the expensive half of the work, and throwing that away
-      # is what makes every iteration pay the full C++ build again.
-      - uses: actions/cache/restore@v4
-        id: cache
-        with:
-          path: ~/nix-binary-cache
-          key: nix-ours-${{ matrix.platform }}-${{ steps.drv.outputs.key }}
-          restore-keys: nix-ours-${{ matrix.platform }}-
-
-      # --no-check-sigs because a local file:// cache we wrote ourselves is unsigned.
-      # A miss is not a failure: it just means everything gets built below.
-      - name: Restore our derivations from the binary cache
-        continue-on-error: true
-        run: |
-          if [ -d ~/nix-binary-cache ]; then
-            nix copy --no-check-sigs --from "file://$HOME/nix-binary-cache" \
-              .#desktop-upload .#openvfs .#libre-graph-api .#gems .#wrapped-ruby
-          fi
+            extra-substituters = file://${{ runner.temp }}/nix-binary-cache
+            require-sigs = false
 
       - name: Build native extensions
         run: |
@@ -129,18 +120,20 @@ jobs:
 
       # Each is copied on its own so one that was never built does not stop the rest
       # being cached: on a failed run some of them exist and some do not.
+      # Each is copied on its own so one that was never built does not stop the rest
+      # being cached: on a failed run some of them exist and some do not.
       - name: Save our derivations to the binary cache
         if: ${{ !cancelled() }}
         run: |
           for pkg in desktop-upload openvfs libre-graph-api gems wrapped-ruby; do
-            nix copy --to "file://$HOME/nix-binary-cache" ".#$pkg" || echo "skipped $pkg"
+            nix copy --to "file://${{ runner.temp }}/nix-binary-cache" ".#$pkg" || echo "skipped $pkg"
           done
 
       - uses: actions/cache/save@v4
         if: ${{ !cancelled() && steps.cache.outputs.cache-hit != 'true' }}
         with:
-          path: ~/nix-binary-cache
-          key: nix-ours-${{ matrix.platform }}-${{ steps.drv.outputs.key }}
+          path: ${{ runner.temp }}/nix-binary-cache
+          key: nix-ours-${{ matrix.platform }}-${{ hashFiles('flake.lock', 'flake.nix', 'gemset.nix', 'patches/**') }}
 
       - uses: actions/upload-artifact@v4
         with:
