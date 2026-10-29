@@ -10,7 +10,7 @@
 #      bin/release-gem — publish this version, source gem and precompiled platform gems
 #
 # SYNOPSIS
-#      bin/release-gem
+#      bin/release-gem [--dry-run]
 #
 # DESCRIPTION
 #      Releasing means publishing two kinds of gem for one version:
@@ -19,17 +19,25 @@
 #      time. It is the fallback for the platforms which are not precompiled, and it is the
 #      reason a user would need Qt 6, the OpenVFS library and a C++ toolchain.
 #
-#      The precompiled platform gems, openvfs-rb-X.Y.Z-<platform>.gem, built in CI by the
-#      Cross Compile workflow with the objects already inside, so that `gem install
-#      openvfs-rb` wants no toolchain on those platforms.
+#      The precompiled platform gems, openvfs-rb-X.Y.Z-<platform>.gem, which carry the
+#      objects already built, so that `gem install openvfs-rb` wants no toolchain on those
+#      platforms.
 #
-#      This script builds the first locally, downloads the rest from the latest successful run
-#      of that workflow, and pushes all of them. So push to main and let Cross Compile
-#      finish before releasing: the run it downloads from has to be one which built this
-#      version.
+#      The Cross Compile workflow uploads the objects themselves rather than gems — one
+#      artifact per platform, holding openvfs.<dlext> and occ/occ.<dlext> — so this script
+#      downloads them and does the packaging. A platform gem is the ordinary gemspec with
+#      three changes: the platform is set, the extensions are cleared so that RubyGems
+#      unpacks instead of compiling, and the Ruby requirement is narrowed to the ABI the
+#      objects were compiled against, because a compiled object only loads on the Ruby it
+#      was built for.
+#
+#      The objects are not stamped with a version, so the run they come from has to be the
+#      one which built this commit: the gate is the run's head SHA against HEAD, not a
+#      filename. So commit, push, and let Cross Compile finish before releasing.
 #
 #      A gem which is already on RubyGems is skipped rather than failed, so a release which
-#      died part way through can be run again.
+#      died part way through can be run again. With --dry-run everything is built and
+#      nothing is pushed or tagged.
 #
 #      It is not `gem kit release`, which does one `gem build` and one `gem push` and has no
 #      notion of per-platform gems. The cost of that is this script skipping the gates `gem
@@ -41,9 +49,9 @@
 #
 # FILES
 #      .github/workflows/cross-compile.yml
-#              The workflow which builds the precompiled platform gems.
+#              The workflow which builds the objects, and whose matrix names the platforms.
 #
-#      pkg/    Where the downloaded artifacts are put. Recreated on each run.
+#      pkg/    Where the artifacts are downloaded and the gems are built. Recreated on each run.
 #
 # EXIT STATUS
 #      The bin/release-gem utility exits 0 on success, and >0 if an error occurs.
@@ -55,13 +63,33 @@
 
 require_relative "../lib/openvfs/rb/version"
 require "fileutils"
+require "json"
 require "open3"
+require "rubygems/package"
 
+root = File.expand_path("..", __dir__)
+Dir.chdir(root)
+
+dry_run = ARGV.include?("--dry-run")
 local_version = OpenVFS::Rb::VERSION
 gem_name = "openvfs-rb"
 gemspec = "openvfs-rb.gemspec"
 workflow = "cross-compile.yml"
 pkg_dir = "pkg"
+
+# The matrix names platforms the way nix does. RubyGems does not: Apple silicon is
+# arm64-darwin there, and a gem named aarch64-darwin would never be selected.
+GEM_PLATFORMS = {
+  "x86_64-linux" => "x86_64-linux",
+  "aarch64-linux" => "aarch64-linux",
+  "x86_64-darwin" => "x86_64-darwin",
+  "aarch64-darwin" => "arm64-darwin",
+  "x64-mingw-ucrt" => "x64-mingw-ucrt",
+}.freeze
+
+# The matrix builds one Ruby, and an object is tied to the ABI it was compiled against, so
+# this has to match `ruby:` in the workflow.
+COMPILED_RUBY_ABI = "3.4"
 
 puts "Local version: #{local_version}"
 
@@ -80,7 +108,34 @@ else
 end
 
 unless system("gh --version > /dev/null 2>&1")
-  abort "ERROR: the GitHub CLI (gh) is required to fetch precompiled gems: https://cli.github.com"
+  abort "ERROR: the GitHub CLI (gh) is required to fetch the compiled objects: https://cli.github.com"
+end
+
+head = `git rev-parse HEAD`.strip
+
+if head.empty?
+  abort "ERROR: could not resolve HEAD"
+end
+
+puts "\nLocating latest successful #{workflow} run..."
+
+run_json = `gh run list --workflow=#{workflow} --status success --limit 1 --json databaseId,headSha`
+
+runs = JSON.parse(run_json) rescue []
+
+if runs.empty?
+  abort "ERROR: no successful #{workflow} run found. Push to main and let CI build the objects first."
+end
+
+run_id = runs.first.fetch("databaseId")
+run_sha = runs.first.fetch("headSha")
+
+puts "Run #{run_id} built #{run_sha[0, 7]}"
+
+# The objects carry no version, so the only thing tying them to this release is the commit they were built from.
+unless run_sha == head
+  abort "ERROR: the latest successful run built #{run_sha[0, 7]}, but HEAD is #{head[0, 7]}.\n" \
+        "Push #{local_version} to main, wait for cross-compile to finish, then re-run."
 end
 
 puts "\nBuilding source gem from #{gemspec}..."
@@ -92,39 +147,108 @@ source_gem = "#{gem_name}-#{local_version}.gem"
 FileUtils.rm_rf(pkg_dir)
 FileUtils.mkdir_p(pkg_dir)
 
-puts "\nLocating latest successful #{workflow} run..."
+puts "\nDownloading compiled objects from run #{run_id}..."
 
-run_id = `gh run list --workflow=#{workflow} --status success --limit 1 --json databaseId --jq '.[0].databaseId'`.strip
-
-if run_id.empty?
-  abort "ERROR: no successful #{workflow} run found. Push to main and let CI build the platform gems first."
-end
-
-puts "Downloading precompiled gems from run #{run_id}..."
-
-system("gh", "run", "download", run_id, "--dir", pkg_dir, "--pattern", "cross-gem-*") ||
+system("gh", "run", "download", run_id.to_s, "--dir", pkg_dir, "--pattern", "cross-gem-*") ||
   abort("ERROR: failed to download artifacts from run #{run_id}")
 
-platform_gems = Dir["#{pkg_dir}/**/#{gem_name}-#{local_version}-*.gem"].sort
+artifacts = Dir["#{pkg_dir}/cross-gem-*"].select{|path| File.directory?(path)}.sort
 
-if platform_gems.empty?
-  built = Dir["#{pkg_dir}/**/*.gem"].map{|path| File.basename(path)}
-
-  if built.empty?
-    abort "ERROR: run #{run_id} produced no gems."
-  else
-    abort "ERROR: the latest CI run built #{built.join(', ')}, not version #{local_version}.\n" \
-          "Push #{local_version} to main, wait for cross-compile to finish, then re-run."
-  end
+if artifacts.empty?
+  abort "ERROR: run #{run_id} uploaded no cross-gem-* artifacts."
 end
 
-puts "Precompiled platform gems for #{local_version}:"
+source_spec = Gem::Specification.load(gemspec)
+
+if source_spec.nil?
+  abort "ERROR: could not load #{gemspec}"
+end
+
+# Everything the source gem ships except the extension sources, which a precompiled gem has no use for. The gemspec globs with FNM_DOTMATCH, so its list holds directory entries too.
+carried = source_spec.files.reject{|path| path.start_with?("ext/")}.select{|path| File.file?(path)}
+
+platform_gems = []
+
+artifacts.each do |artifact|
+  matrix_platform = File.basename(artifact).delete_prefix("cross-gem-")
+  gem_platform = GEM_PLATFORMS[matrix_platform]
+
+  if gem_platform.nil?
+    abort "ERROR: #{artifact} names platform #{matrix_platform}, which has no RubyGems platform in GEM_PLATFORMS."
+  end
+
+  # Whatever the job built: the Windows gem has occ alone, because upstream ships no Windows build of libopenvfs.
+  openvfs_object = Dir["#{artifact}/**/openvfs.{so,bundle}"].first
+  occ_object = Dir["#{artifact}/**/occ.{so,bundle}"].first
+
+  if occ_object.nil?
+    abort "ERROR: #{artifact} holds no occ object; the run did not build it."
+  end
+
+  dlext = File.extname(occ_object).delete_prefix(".")
+  staging = File.join(pkg_dir, "stage-#{gem_platform}")
+
+  FileUtils.mkdir_p(staging)
+
+  carried.each do |path|
+    destination = File.join(staging, path)
+
+    FileUtils.mkdir_p(File.dirname(destination))
+    FileUtils.cp(path, destination)
+  end
+
+  # Into lib/, under the names the requires already ask for: lib/openvfs.rb does
+  # `require "openvfs/openvfs"` and lib/openvfs/occ.rb does `require "openvfs/occ/occ"`.
+  staged = []
+
+  unless openvfs_object.nil?
+    destination = File.join(staging, "lib/openvfs/openvfs.#{dlext}")
+
+    FileUtils.mkdir_p(File.dirname(destination))
+    FileUtils.cp(openvfs_object, destination)
+    staged << "lib/openvfs/openvfs.#{dlext}"
+  end
+
+  destination = File.join(staging, "lib/openvfs/occ/occ.#{dlext}")
+
+  FileUtils.mkdir_p(File.dirname(destination))
+  FileUtils.cp(occ_object, destination)
+  staged << "lib/openvfs/occ/occ.#{dlext}"
+
+  spec = source_spec.dup
+  spec.platform = Gem::Platform.new(gem_platform)
+
+  # The objects are already inside, so there is nothing to compile; leaving the extensions set is what would make RubyGems try.
+  spec.extensions = []
+  spec.required_ruby_version = "~> #{COMPILED_RUBY_ABI}.0"
+  spec.files = carried + staged
+
+  built = Dir.chdir(staging){Gem::Package.build(spec)}
+  produced = File.join(pkg_dir, built)
+
+  FileUtils.mv(File.join(staging, built), produced)
+  FileUtils.rm_rf(staging)
+
+  platform_gems << produced
+
+  puts "  #{built}  (#{staged.join(', ')})"
+end
+
+platform_gems.sort!
+
+puts "\nPrecompiled platform gems for #{local_version}:"
 
 platform_gems.each{|path| puts "  #{File.basename(path)}"}
 
-# A gem which is already up is skipped rather than failed, so that a release which died part way through can be run again.
 all_gems = [source_gem] + platform_gems
 
+if dry_run
+  puts "\n--dry-run: built #{all_gems.size} gems, pushed none"
+
+  exit 0
+end
+
+# A gem which is already up is skipped rather than failed, so that a release which died part way through can be run again.
 all_gems.each do |gem_file|
   puts "\nPushing #{File.basename(gem_file)}..."
 

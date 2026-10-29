@@ -182,6 +182,19 @@ jobs:
           make -C ext/openvfs/occ
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
+      # extconf reports every failure as "no", so the reason a check failed is only in
+      # mkmf.log, which stays on the runner.
+      - name: Show mkmf.log
+        if: ${{ failure() }}
+        shell: pwsh
+        run: |
+          foreach ($log in @("ext/openvfs/occ/mkmf.log", "ext/openvfs/mkmf.log")) {
+            if (Test-Path $log) {
+              Write-Host "===== $log"
+              Get-Content $log
+            }
+          }
+
       # The openvfs extension is not built here, so this is also the check that
       # requiring occ no longer drags it in.
       - name: Load the extension
