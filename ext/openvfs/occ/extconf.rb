@@ -20,10 +20,7 @@ else
   $LDFLAGS << " -Wl,--gc-sections -Wl,--exclude-libs,ALL"
 end
 
-# opencloudsynclib.h rather than a real header: mkmf puts ruby.h first in the program it
-# compiles to probe, and on Windows that defines truncate and access as macros, which Qt
-# refuses to be parsed after. The generated export header pulls in nothing, so it answers
-# the only question being asked - whether the development files are installed.
+# opencloudsynclib.h rather than a real header: mkmf puts ruby.h first in the program it compiles to probe, and on Windows that defines truncate and access as macros, which Qt refuses to be parsed after. The generated export header pulls in nothing, so it answers the only question being asked - whether the development files are installed.
 unless have_header("libsync/opencloudsynclib.h")
   abort "missing OpenCloud Desktop upload headers"
 end
