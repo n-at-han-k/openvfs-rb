@@ -1,5 +1,5 @@
 diff --git a/src/gui/folder.cpp b/src/gui/folder.cpp
-index 3e512df..47eeb49 100644
+index 3e512df..fdb4551 100644
 --- a/src/gui/folder.cpp
 +++ b/src/gui/folder.cpp
 @@ -18,7 +18,6 @@
@@ -66,7 +66,66 @@ index 3e512df..47eeb49 100644
  QUrl Folder::webUrl() const
  {
      return _webUrl;
-@@ -311,9 +291,6 @@ void Folder::prepareFolder(const QString &path, const QString &displayName, cons
+@@ -255,65 +235,17 @@ void Folder::setIsReady(bool b)
+ 
+ void Folder::prepareFolder(const QString &path, const QString &displayName, const QString &description, bool override)
+ {
+-#ifdef Q_OS_WIN
+-    // First create a Desktop.ini so that the folder and favorite link show our application's icon.
+-    const QFileInfo desktopIniPath{u"%1/Desktop.ini"_s.arg(path)};
+-    if (!desktopIniPath.exists() || override) {
+-        // we can't use QSettings as we require the file to be utf16 encoded
+-        qCInfo(lcFolder) << u"Creating" << desktopIniPath.filePath() << u"to set a folder icon in Explorer.";
+-        QFile file(desktopIniPath.filePath());
+-        if (file.open(QIODevice::WriteOnly)) {
+-            QTextStream out(&file);
+-            out.setEncoding(QStringConverter::Utf16);
+-            out.setGenerateByteOrderMark(true);
+-            const QString eol = u"\r\n"_s;
+-            out << u"[.ShellClassInfo]"_s << eol << //
+-                u"IconResource="_s << QDir::toNativeSeparators(qApp->applicationFilePath()) << eol << //
+-                u"ConfirmFileOp=1"_s << eol;
+-            if (!displayName.isEmpty()) {
+-                out << u"LocalizedResourcename="_s << displayName << eol;
+-            }
+-            out << u"InfoTip="_s;
+-            if (description.isEmpty()) {
+-                out << Resources::JsonTheme::instance().applicationDisplayName();
+-                if (!displayName.isEmpty()) {
+-                    out << u" - "_s << displayName;
+-                }
+-            } else {
+-                out << description;
+-            }
+-            out << eol;
+-        }
+-    } else {
+-        qCWarning(lcFolder) << u"Failed to write Desktop.ini";
+-    }
+-
+-    const QString longFolderPath = FileSystem::longWinPath(path);
+-    const QString longDesktopIniPath = FileSystem::longWinPath(desktopIniPath.absoluteFilePath());
+-    // Set the folder as system and Desktop.ini as hidden+system for explorer to pick it.
+-    // https://msdn.microsoft.com/en-us/library/windows/desktop/cc144102
+-    const DWORD folderAttrs = GetFileAttributesW(reinterpret_cast<const wchar_t *>(longFolderPath.utf16()));
+-    if (!SetFileAttributesW(reinterpret_cast<const wchar_t *>(longFolderPath.utf16()), folderAttrs | FILE_ATTRIBUTE_SYSTEM)) {
+-        const auto error = GetLastError();
+-        qCWarning(lcFolder) << u"SetFileAttributesW failed on" << longFolderPath << Utility::formatWinError(error);
+-    }
+-    if (!SetFileAttributesW(reinterpret_cast<const wchar_t *>(longDesktopIniPath.utf16()), FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM)) {
+-        const auto error = GetLastError();
+-        qCWarning(lcFolder) << u"SetFileAttributesW failed on" << longDesktopIniPath << Utility::formatWinError(error);
+-    }
+-#else
++    // Upstream writes a Desktop.ini here so that Explorer shows the application's icon
++    // on the sync folder, and names it with the themed display name. It is decoration,
++    // and there is no application here to name.
+     Q_UNUSED(path)
+     Q_UNUSED(displayName)
+     Q_UNUSED(description)
+     Q_UNUSED(override)
+-#endif
+ }
  
  QString Folder::displayName() const
  {
@@ -76,7 +135,7 @@ index 3e512df..47eeb49 100644
      return _definition.displayName();
  }
  
-@@ -374,9 +351,6 @@ QUrl Folder::webDavUrl() const
+@@ -374,9 +306,6 @@ QUrl Folder::webDavUrl() const
  {
      const QString spaceId = _definition.spaceId();
      if (!spaceId.isEmpty()) {
@@ -86,7 +145,7 @@ index 3e512df..47eeb49 100644
      }
      return _definition.webDavUrl();
  }
-@@ -535,7 +509,7 @@ void Folder::createGuiLog(const QString &filename, LogStatus status, int count,
+@@ -535,7 +464,7 @@ void Folder::createGuiLog(const QString &filename, LogStatus status, int count,
          }
  
          if (!text.isEmpty()) {
@@ -95,7 +154,7 @@ index 3e512df..47eeb49 100644
          }
      }
  }
-@@ -547,10 +521,9 @@ void Folder::startVfs()
+@@ -547,10 +476,9 @@ void Folder::startVfs()
  
      VfsSetupParams vfsParams(_accountState->account(), webDavUrl(), _definition.spaceId(), displayName(), _engine.get());
      vfsParams.journal = &_journal;
@@ -108,7 +167,7 @@ index 3e512df..47eeb49 100644
  
      connect(&_engine->syncFileStatusTracker(), &SyncFileStatusTracker::fileStatusChanged,
          _vfs.data(), &Vfs::fileStatusChanged);
-@@ -799,8 +772,6 @@ void Folder::wipeForRemoval()
+@@ -799,8 +727,6 @@ void Folder::wipeForRemoval()
      // Delete files that have been partially downloaded.
      slotDiscardDownloadProgress();
  
@@ -117,7 +176,7 @@ index 3e512df..47eeb49 100644
      _journal.close(); // close the sync journal
  
      // Remove db and temporaries
-@@ -895,7 +866,7 @@ void Folder::startSync()
+@@ -895,7 +821,7 @@ void Folder::startSync()
      _syncResult.reset();
      setSyncState(SyncResult::SyncRunning);
  
@@ -126,7 +185,7 @@ index 3e512df..47eeb49 100644
  
      setDirtyNetworkLimits();
  
-@@ -965,7 +936,7 @@ void Folder::slotSyncFinished(bool success)
+@@ -965,7 +891,7 @@ void Folder::slotSyncFinished(bool success)
          // probably removing the folder
          return;
      }
@@ -135,7 +194,7 @@ index 3e512df..47eeb49 100644
  
      bool syncError = !_syncResult.errorStrings().isEmpty();
      if (syncError) {
-@@ -1099,27 +1070,13 @@ void Folder::warnOnNewExcludedItem(const SyncJournalFileRecord &record, QStringV
+@@ -1099,27 +1025,13 @@ void Folder::warnOnNewExcludedItem(const SyncJournalFileRecord &record, QStringV
                                              "It will not be synchronized.")
                                               .arg(fi.filePath());
  
