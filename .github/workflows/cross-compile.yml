@@ -37,6 +37,8 @@ on:
 
 permissions:
   contents: read
+  # Magic Nix Cache authenticates with this.
+  id-token: write
 
 # Keyed by workflow as well as ref: a new push cancels this workflow's own previous
 # run rather than queueing another behind it. Sharing one group across workflows
@@ -84,29 +86,12 @@ jobs:
         with:
           submodules: recursive
 
-      # Restored before nix is installed so it can be wired in as a substituter below.
-      # Keyed on the files that decide what gets built, which is computable without
-      # nix: an installable's store path is not knowable until nix has evaluated it.
-      # restore/save rather than actions/cache, whose post step only saves when the job
-      # succeeded - a job that builds the static library and then fails compiling the
-      # extension has done the expensive half of the work.
-      - uses: actions/cache/restore@v4
-        id: cache
-        with:
-          path: ${{ runner.temp }}/nix-binary-cache
-          key: nix-ours-${{ matrix.platform }}-${{ hashFiles('flake.lock', 'flake.nix', 'gemset.nix', 'patches/**') }}
-          restore-keys: nix-ours-${{ matrix.platform }}-
-
-      # As a substituter, not an explicit `nix copy --from`: that takes an installable,
-      # so nix realises it, and a path the cache does not have is built rather than
-      # skipped. A substituter is consulted for every path nix wants, which is the
-      # whole point. require-sigs because the cache is one we wrote and never signed.
-      - uses: cachix/install-nix-action@v31
-        with:
-          extra_nix_config: |
-            experimental-features = nix-command flakes
-            extra-substituters = file://${{ runner.temp }}/nix-binary-cache
-            require-sigs = false
+      # The Determinate installer plus Magic Nix Cache, which is the pairing their
+      # docs show. The cache registers itself as a substituter and a post-build hook,
+      # so every path nix builds here is pushed and every path it wants is looked up,
+      # with no key to get right. Needs id-token: write, set on the workflow.
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
 
       - name: Build native extensions
         run: |
@@ -120,21 +105,6 @@ jobs:
 
       # Each is copied on its own so one that was never built does not stop the rest
       # being cached: on a failed run some of them exist and some do not.
-      # Each is copied on its own so one that was never built does not stop the rest
-      # being cached: on a failed run some of them exist and some do not.
-      - name: Save our derivations to the binary cache
-        if: ${{ !cancelled() }}
-        run: |
-          for pkg in desktop-upload openvfs libre-graph-api gems wrapped-ruby; do
-            nix copy --to "file://${{ runner.temp }}/nix-binary-cache" ".#$pkg" || echo "skipped $pkg"
-          done
-
-      - uses: actions/cache/save@v4
-        if: ${{ !cancelled() && steps.cache.outputs.cache-hit != 'true' }}
-        with:
-          path: ${{ runner.temp }}/nix-binary-cache
-          key: nix-ours-${{ matrix.platform }}-${{ hashFiles('flake.lock', 'flake.nix', 'gemset.nix', 'patches/**') }}
-
       - uses: actions/upload-artifact@v4
         with:
           name: cross-gem-${{ matrix.platform }}
