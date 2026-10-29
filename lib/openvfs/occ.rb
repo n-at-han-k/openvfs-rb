@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
-require_relative "../openvfs"
+# Deliberately not "../openvfs": that pulls in the openvfs extension, which wraps the
+# placeholder attributes libopenvfs keeps in extended attributes. Nothing here needs
+# them, and upstream ships no Windows build of that library.
+require_relative "version"
 require "openvfs/occ/occ"
 
 require "fileutils"

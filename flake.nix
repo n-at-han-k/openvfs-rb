@@ -78,6 +78,8 @@
           src = openvfs;
           buildInputs = [ pkgs.nlohmann_json ];
 
+          meta.platforms = pkgs.lib.platforms.linux ++ pkgs.lib.platforms.darwin;
+
           buildPhase = ''
             runHook preBuild
             mkdir -p generated/openvfs "$out/include/openvfs" "$out/lib"
@@ -92,7 +94,7 @@
             $CXX -std=c++23 -fPIC -shared -D_FILE_OFFSET_BITS=64 \
               -I"$src/src" -Igenerated -I"${pkgs.nlohmann_json}/include" \
               "$src/src/openvfs/openvfs.cpp" "$src/src/openvfs/xattr.cpp" \
-              -o "$out/lib/libopenvfs.so"
+              -o "$out/lib/libopenvfs${pkgs.stdenv.hostPlatform.extensions.sharedLibrary}"
             runHook postBuild
           '';
 
@@ -126,7 +128,13 @@
 
       in
       {
+        # Everything here is built from source on every runner: none of these are in
+        # cache.nixos.org, so CI's binary cache step copies exactly these closures.
         packages.desktop-upload = desktopUpload;
+        packages.openvfs = openvfsLibrary;
+        packages.libre-graph-api = libreGraphApi;
+        packages.gems = gems;
+        packages.wrapped-ruby = gems.wrappedRuby;
 
         devShells.default = lib.mkRubyShell {
           buildInputs = with pkgs; [

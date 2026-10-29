@@ -1,3 +1,8 @@
+// rice.hpp stores a std::exception_ptr without including <exception> for it.
+// libstdc++ happens to pull the complete type in anyway; libc++ only forward-declares
+// it, so on clang every use is an incomplete type unless this comes first.
+#include <exception>
+
 #include <rice/rice.hpp>
 #include <rice/stl.hpp>
 

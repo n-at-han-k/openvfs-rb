@@ -1,6 +1,6 @@
 diff --git a/opencloud-upload.pc.in b/opencloud-upload.pc.in
 new file mode 100644
-index 0000000..23bd95b
+index 0000000..67e4cd6
 --- /dev/null
 +++ b/opencloud-upload.pc.in
 @@ -0,0 +1,10 @@
@@ -11,6 +11,6 @@ index 0000000..23bd95b
 +Name: opencloud-upload
 +Description: OpenCloud Desktop watching, discovery and upload subset
 +Version: @MIRALL_VERSION@
-+Requires: Qt6Core Qt6Concurrent Qt6Gui Qt6Network sqlite3
-+Libs: -L${libdir} -lopencloud-upload -L@QTKEYCHAIN_LIBDIR@ -lqt6keychain -lz
-+Cflags: -I${includedir} -I${includedir}/libsync -I${includedir}/gui -I${includedir}/cmd -I@QTKEYCHAIN_INCLUDE_DIR@ -DOPENCLOUD_BUILT_AS_STATIC -DQT_NO_KEYWORDS
++Requires: @OPENCLOUD_UPLOAD_PC_REQUIRES@
++Libs: -L${libdir} -lopencloud-upload@OPENCLOUD_UPLOAD_PC_QT_LIBS@ -L@QTKEYCHAIN_LIBDIR@ -lqt6keychain -lz
++Cflags: -I${includedir} -I${includedir}/libsync -I${includedir}/gui -I${includedir}/cmd -I@QTKEYCHAIN_INCLUDE_DIR@@OPENCLOUD_UPLOAD_PC_QT_CFLAGS@ -DOPENCLOUD_BUILT_AS_STATIC -DQT_NO_KEYWORDS

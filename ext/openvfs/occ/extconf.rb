@@ -12,7 +12,15 @@ unless pkg_config("opencloud-upload")
 end
 
 $CXXFLAGS << " -std=c++23 -fPIC -Wno-array-bounds"
-$LDFLAGS << " -Wl,--gc-sections -Wl,--exclude-libs,ALL"
+
+# The static library is built with -ffunction-sections, so the link can drop every
+# function the extension never calls. ld64 spells that -dead_strip and has no
+# equivalent of --exclude-libs.
+if RbConfig::CONFIG["host_os"].match?(/darwin/)
+  $LDFLAGS << " -Wl,-dead_strip"
+else
+  $LDFLAGS << " -Wl,--gc-sections -Wl,--exclude-libs,ALL"
+end
 
 unless have_header("libsync/propagateupload.h")
   abort "missing OpenCloud Desktop upload headers"

@@ -6,8 +6,13 @@ name: Cross Compile
 # library, the trimmed OpenCloud Desktop static library) are built via nix.
 #
 # Linux and macOS build inside nix (the flake provides all native deps).
-# Windows is not yet supported: the native deps are nix-only and would need
-# to be built manually with MSVC + Qt 6.
+#
+# Windows cannot use nix, so it builds the same static library with CMake against
+# MSYS2's ucrt64 toolchain - the one RubyInstaller's own ucrt builds use - and
+# compiles only the occ extension. The openvfs extension is left out there: it wraps
+# libopenvfs, which keeps its placeholder state in POSIX extended attributes, and
+# upstream gates its desktop plugin behind `if (NOT WIN32)` for that reason. The gem
+# configures `virtualFilesMode=off`, so nothing in the API surface needs it.
 #
 # This does NOT publish to RubyGems — releasing is a manual step you perform
 # with the built gems (see README).
@@ -24,6 +29,10 @@ on:
       - 'gemset.nix'
       - '.github/workflows/cross-compile.yml'
       - 'lib/**'
+      # The patches decide which desktop sources are compiled at all, and the
+      # submodule pointer decides what they apply to.
+      - 'patches/**'
+      - 'opencloud-desktop'
   workflow_dispatch:
 
 permissions:
@@ -58,10 +67,10 @@ jobs:
             os: ubuntu-24.04-arm
             ruby: "3.4"
           - platform: x86_64-darwin
-            os: macos-13
+            os: macos-15-intel
             ruby: "3.4"
           - platform: aarch64-darwin
-            os: macos-14
+            os: macos-15
             ruby: "3.4"
     steps:
       - uses: actions/checkout@v4
@@ -73,6 +82,29 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
+      - name: Resolve the dev shell derivation
+        id: drv
+        run: |
+          system=$(nix eval --raw --impure --expr builtins.currentSystem)
+          drv=$(nix eval --raw ".#devShells.$system.default.drvPath")
+          echo "key=$(basename "$drv" .drv)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/nix-binary-cache
+          key: nix-ours-${{ matrix.platform }}-${{ steps.drv.outputs.key }}
+          restore-keys: nix-ours-${{ matrix.platform }}-
+
+      # --no-check-sigs because a local file:// cache we wrote ourselves is unsigned.
+      # A miss is not a failure: it just means everything gets built below.
+      - name: Restore our derivations from the binary cache
+        continue-on-error: true
+        run: |
+          if [ -d ~/nix-binary-cache ]; then
+            nix copy --no-check-sigs --from "file://$HOME/nix-binary-cache" \
+              .#desktop-upload .#openvfs .#libre-graph-api .#gems .#wrapped-ruby
+          fi
+
       - name: Build native extensions
         run: |
           nix develop --command ruby -C ext/openvfs extconf.rb
@@ -83,6 +115,11 @@ jobs:
       - name: Run the suite
         run: nix develop --command bundle exec sus
 
+      - name: Save our derivations to the binary cache
+        run: |
+          nix copy --to "file://$HOME/nix-binary-cache" \
+            .#desktop-upload .#openvfs .#libre-graph-api .#gems .#wrapped-ruby
+
       - uses: actions/upload-artifact@v4
         with:
           name: cross-gem-${{ matrix.platform }}
@@ -91,4 +128,71 @@ jobs:
             ext/openvfs/occ/occ.so
             ext/openvfs/openvfs.bundle
             ext/openvfs/occ/occ.bundle
+          if-no-files-found: error
+
+  cross-gem-windows:
+    name: Compile native gem for ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: x64-mingw-ucrt
+            os: windows-2025
+            ruby: "3.4"
+    steps:
+      # The patches are LF, and git-for-windows would otherwise check the submodule
+      # out with CRLF and make every one of them fail to apply.
+      - name: Keep line endings as committed
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: ruby/setup-ruby-pkgs@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          mingw: cmake ninja pkgconf qt6-base qtkeychain sqlite3 zlib extra-cmake-modules
+
+      - name: Apply the desktop patches
+        shell: bash
+        run: bin/apply-patches
+
+      - name: Build the trimmed desktop static library
+        shell: pwsh
+        run: |
+          $prefix = "$env:GITHUB_WORKSPACE/build/prefix" -replace '\\', '/'
+          $sha1 = git -C opencloud-desktop rev-parse HEAD
+          cmake -S opencloud-desktop -B build/desktop-upload -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            "-DCMAKE_INSTALL_PREFIX=$prefix" `
+            "-DGIT_SHA1=$sha1"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build build/desktop-upload
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --install build/desktop-upload
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          "OPENCLOUD_UPLOAD_PREFIX=$prefix" >> $env:GITHUB_ENV
+
+      - name: Build the occ extension
+        shell: pwsh
+        run: |
+          gem install rice --no-document
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ruby -C ext/openvfs/occ extconf.rb
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          make -C ext/openvfs/occ
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      # The openvfs extension is not built here, so this is also the check that
+      # requiring occ no longer drags it in.
+      - name: Load the extension
+        shell: pwsh
+        run: ruby -Ilib -Iext -e 'require "openvfs/occ"; puts OpenVFS::VERSION'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cross-gem-${{ matrix.platform }}
+          path: ext/openvfs/occ/occ.so
           if-no-files-found: error
