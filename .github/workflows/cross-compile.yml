@@ -1,0 +1,94 @@
+name: Cross Compile
+
+# Cross-compiles the C++/Qt native extensions and uploads them as build
+# artifacts. Mirrors the structure of vodozemac-rb's cross-compile workflow,
+# adapted for a C++ native gem whose dependencies (Qt 6, the OpenVFS
+# library, the trimmed OpenCloud Desktop static library) are built via nix.
+#
+# Linux and macOS build inside nix (the flake provides all native deps).
+# Windows is not yet supported: the native deps are nix-only and would need
+# to be built manually with MSVC + Qt 6.
+#
+# This does NOT publish to RubyGems — releasing is a manual step you perform
+# with the built gems (see README).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ext/**'
+      - 'openvfs-rb.gemspec'
+      - 'Rakefile'
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'gemset.nix'
+      - '.github/workflows/cross-compile.yml'
+      - 'lib/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ci-data:
+    name: Fetch the supported platforms and Ruby versions
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.fetch.outputs.result }}
+    steps:
+      - uses: oxidize-rb/actions/fetch-ci-data@v1
+        id: fetch
+        with:
+          supported-ruby-platforms: true
+          stable-ruby-versions: |
+            exclude: [head]
+
+  cross-gem:
+    name: Compile native gem for ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    needs: ci-data
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: x86_64-linux
+            os: ubuntu-latest
+            ruby: "3.4"
+          - platform: aarch64-linux
+            os: ubuntu-24.04-arm
+            ruby: "3.4"
+          - platform: x86_64-darwin
+            os: macos-13
+            ruby: "3.4"
+          - platform: aarch64-darwin
+            os: macos-14
+            ruby: "3.4"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Build native extensions
+        run: |
+          nix develop --command ruby -C ext/openvfs extconf.rb
+          nix develop --command make -C ext/openvfs
+          nix develop --command ruby -C ext/openvfs/occ extconf.rb
+          nix develop --command make -C ext/openvfs/occ
+
+      - name: Run the suite
+        run: nix develop --command bundle exec sus
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cross-gem-${{ matrix.platform }}
+          path: |
+            ext/openvfs/openvfs.so
+            ext/openvfs/occ/occ.so
+            ext/openvfs/openvfs.bundle
+            ext/openvfs/occ/occ.bundle
+          if-no-files-found: error
