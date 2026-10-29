@@ -7,56 +7,43 @@ require "fileutils"
 require "securerandom"
 
 module OpenVFS
-  # OpenCloud Desktop's sync client.
-  module OCC
-    # The INI file AccountManager::restore and FolderMan::loadFolders read on start.
-    def self.config_path = File.join(Dir.home, ".config", "openvfs-rb", "openvfs-rb.cfg")
+  # Writes the INI file AccountManager::restore and FolderMan::loadFolders read on start.
+  #
+  # The credential is not written here: credentials live in the keychain, so store it with Account#credential_manager.set("http/oauthtoken", credential) before starting.
+  #
+  # @parameter path [String] The local directory to sync.
+  # @parameter url [String] The server's base URL.
+  # @parameter remote_path [String] The WebDAV path to sync against.
+  # @parameter uuid [String] The account's UUID; also names the keychain entry.
+  # @parameter display_name [String] How the folder is named in logs.
+  # @parameter space_id [String] The space to sync, if any.
+  # @returns [String] The UUID the account was written under.
+  def self.configure(path, url:, remote_path:, uuid: SecureRandom.uuid, display_name: path, space_id: "")
+    config_path = File.join(Dir.home, ".config", "openvfs-rb", "openvfs-rb.cfg")
+    FileUtils.mkdir_p(File.dirname(config_path))
+    FileUtils.mkdir_p(path)
 
-    # Writes the configuration file that start reads.
-    #
-    # The token is not written here: credentials live in the keychain, so store it with
-    # Account#credential_manager.set("http/oauthtoken", token) before starting.
-    #
-    # @parameter path [String] The local directory to sync.
-    # @parameter url [String] The server's base URL.
-    # @parameter remote_path [String] The WebDAV path to sync against.
-    # @parameter uuid [String] The account's UUID; also names the keychain entry.
-    # @parameter display_name [String] How the folder is named in logs.
-    # @parameter space_id [String] The space to sync, if any.
-    # @returns [String] The UUID the account was written under.
-    def self.configure(path, url:, remote_path:, uuid: SecureRandom.uuid, display_name: path, space_id: "")
-      FileUtils.mkdir_p(File.dirname(config_path))
-      FileUtils.mkdir_p(path)
+    File.write(config_path, <<~CONFIG)
+      [Accounts]
+      1\\url=#{url}
+      1\\uuid=#{uuid}
+      size=1
 
-      File.write(config_path, <<~CONFIG)
-        [Accounts]
-        1\\url=#{url}
-        1\\userUUID=#{uuid}
-        size=1
+      [Folders]
+      1\\accountUUID=#{uuid}
+      1\\localPath=#{File.join(path, "")}
+      1\\journalPath=.sync_journal.db
+      1\\davUrl=#{remote_path}
+      1\\spaceId=#{space_id}
+      1\\displayString=#{display_name}
+      1\\paused=false
+      1\\ignoreHiddenFiles=true
+      1\\deployed=false
+      1\\priority=0
+      1\\virtualFilesMode=off
+      size=1
+    CONFIG
 
-        [Folders]
-        1\\accountUUID=#{uuid}
-        1\\localPath=#{File.join(path, "")}
-        1\\journalPath=.sync_journal.db
-        1\\davUrl=#{remote_path}
-        1\\spaceId=#{space_id}
-        1\\displayString=#{display_name}
-        1\\paused=false
-        1\\ignoreHiddenFiles=true
-        1\\deployed=false
-        1\\priority=0
-        1\\virtualFilesMode=off
-        size=1
-      CONFIG
-
-      uuid
-    end
-
-    # Runs the sync client. Takes the arguments the command line already accepts, such as
-    # --logfile, --logdebug and --logflush.
-    #
-    # @parameter arguments [Array(String)] The command line arguments.
-    # @returns [Integer] The client's exit code.
-    def self.start(arguments = []) = init(["openvfs-rb", *arguments])
+    uuid
   end
 end

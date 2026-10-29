@@ -8,3 +8,4 @@
 /ext/**/*.so
 /ext/**/*.bundle
 /ext/**/mkmf.log
+result

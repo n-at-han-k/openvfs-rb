@@ -31,7 +31,7 @@ enabled in `.rubocop.yml`:
 
 ## Patching OpenCloud Desktop
 
-The native `OpenVFS::OCC` extension links a trimmed static library built from OpenCloud Desktop's
+The native `OpenVFS` extension links a trimmed static library built from OpenCloud Desktop's
 sources. Desktop is vendored as the `opencloud-desktop` submodule, and two files decide what gets
 built from it:
 

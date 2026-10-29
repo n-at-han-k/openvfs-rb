@@ -1,8 +1,8 @@
 diff --git a/src/gui/main.cpp b/src/gui/main.cpp
-index cc007f9..311b2f7 100644
+index cc007f9..9e62cd0 100644
 --- a/src/gui/main.cpp
 +++ b/src/gui/main.cpp
-@@ -14,36 +14,25 @@
+@@ -14,36 +14,26 @@
   */
  #include <QtGlobal>
  
@@ -11,6 +11,7 @@ index cc007f9..311b2f7 100644
  #include "accountmanager.h"
 -#include "common/restartmanager.h"
 -#include "gui/application.h"
++#include "accountstate.h"
  #include "gui/folderman.h"
 -#include "gui/logbrowser.h"
  #include "gui/networkinformation.h"
@@ -41,7 +42,7 @@ index cc007f9..311b2f7 100644
  #ifdef Q_OS_WIN
  #include <qt_windows.h>
  #endif
-@@ -68,13 +57,6 @@ void displayHelpText(const QString &t)
+@@ -68,13 +58,6 @@ void displayHelpText(const QString &t)
  {
      Logger::instance()->attacheToConsole();
      std::cout << qUtf8Printable(t) << std::endl;
@@ -55,7 +56,7 @@ index cc007f9..311b2f7 100644
  }
  
  struct CommandLineOptions
-@@ -98,12 +80,12 @@ CommandLineOptions parseOptions(const QStringList &arguments)
+@@ -98,12 +81,12 @@ CommandLineOptions parseOptions(const QStringList &arguments)
      QTextStream descriptionTextStream(&descriptionText);
  
      descriptionTextStream
@@ -71,7 +72,7 @@ index cc007f9..311b2f7 100644
  
      parser.setApplicationDescription(descriptionText);
  
-@@ -121,17 +103,17 @@ CommandLineOptions parseOptions(const QStringList &arguments)
+@@ -121,17 +104,17 @@ CommandLineOptions parseOptions(const QStringList &arguments)
      parser.addOption(showSettingsLegacyOption);
  
      auto showOption = addOption({{QStringLiteral("s"), QStringLiteral("show")},
@@ -97,7 +98,7 @@ index cc007f9..311b2f7 100644
  
      parser.process(arguments);
  
-@@ -147,7 +129,7 @@ CommandLineOptions parseOptions(const QStringList &arguments)
+@@ -147,7 +130,7 @@ CommandLineOptions parseOptions(const QStringList &arguments)
      }
      if (parser.isSet(logDirOption)) {
          if (parser.isSet(logFileOption)) {
@@ -106,7 +107,7 @@ index cc007f9..311b2f7 100644
              std::exit(1);
          }
          out.logDir = parser.value(logDirOption);
-@@ -168,13 +150,10 @@ CommandLineOptions parseOptions(const QStringList &arguments)
+@@ -168,13 +151,10 @@ CommandLineOptions parseOptions(const QStringList &arguments)
  
  void showDowngradeDialog()
  {
@@ -124,7 +125,7 @@ index cc007f9..311b2f7 100644
  }
  
  /**
-@@ -229,228 +208,31 @@ void setupLogging(const CommandLineOptions &options)
+@@ -229,228 +209,31 @@ void setupLogging(const CommandLineOptions &options)
      }
      logger->setLogDebug(options.logDebug);
  
@@ -365,7 +366,7 @@ index cc007f9..311b2f7 100644
  
          // Check if the user upgraded or downgraded. We do this as early as possible, to detect
          // a possible downgrade.
-@@ -467,10 +249,6 @@ int main(int argc, char **argv)
+@@ -467,68 +250,33 @@ int main(int argc, char **argv)
  
          if (!AccountManager::instance()->restore()) {
              qCCritical(lcMain) << u"Could not read the account settings, quitting";
@@ -376,7 +377,15 @@ index cc007f9..311b2f7 100644
              return -1;
          }
  
-@@ -479,56 +257,18 @@ int main(int argc, char **argv)
++        // The UI's Application object normally connects restored accounts to FolderMan and starts
++        // their connectivity checks. The headless bootstrap has to do both here.
++        for (const auto &accountState : AccountManager::instance()->accounts()) {
++            QObject::connect(accountState.data(), &AccountState::isConnectedChanged, FolderMan::instance(), &FolderMan::slotIsConnectedChanged);
++            accountState->checkConnectivity();
++        }
++
+         // Setup the folders. This includes a downgrade-detection, in which case the return value
+         // is empty. Note that the value 0 (zero) is a valid return value (non-empty), in which case
          // the dialog is not shown.
          if (!FolderMan::instance()->loadFolders().has_value()) {
              // Empty return value: there was a downgrade detected on one of the databases

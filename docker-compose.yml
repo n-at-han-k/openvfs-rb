@@ -12,7 +12,7 @@ services:
       OC_INSECURE: ${OC_INSECURE:-true}
       PROXY_TLS: "false"
       # Enable HTTP Basic authentication for WebDAV clients that do not speak
-      # OpenID Connect, e.g. the native Ruby upload tests.
+      # OpenID Connect, e.g. the native Ruby sync tests.
       PROXY_ENABLE_BASIC_AUTH: ${PROXY_ENABLE_BASIC_AUTH:-true}
       IDM_ADMIN_PASSWORD: ${IDM_ADMIN_PASSWORD:-openvfs-rb-test-admin}
       IDM_CREATE_DEMO_USERS: ${IDM_CREATE_DEMO_USERS:-false}

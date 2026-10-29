@@ -1,18 +1,17 @@
 diff --git a/src/gui/folderman.cpp b/src/gui/folderman.cpp
-index 9b03bab..b83f30b 100644
+index 9b03bab..e4f5738 100644
 --- a/src/gui/folderman.cpp
 +++ b/src/gui/folderman.cpp
-@@ -14,28 +14,23 @@
+@@ -14,6 +14,8 @@
  
  #include "folderman.h"
  
 +#include <QCoreApplication>
 +
  #include "account.h"
--#include "accountmanager.h"
+ #include "accountmanager.h"
  #include "accountstate.h"
- #include "common/asserts.h"
- #include "configfile.h"
+@@ -22,20 +24,14 @@
  #include "gui/folder.h"
  #include "gui/folderdefinition.h"
  #include "gui/networkinformation.h"
@@ -33,7 +32,7 @@ index 9b03bab..b83f30b 100644
  #include <QtCore>
  
  using namespace Qt::Literals::StringLiterals;
-@@ -88,40 +83,17 @@ const SyncResult &TrayOverallStatusResult::overallStatus() const
+@@ -88,40 +84,17 @@ const SyncResult &TrayOverallStatusResult::overallStatus() const
  FolderMan *FolderMan::_instance = nullptr;
  
  FolderMan::FolderMan()
@@ -80,7 +79,7 @@ index 9b03bab..b83f30b 100644
      return _instance;
  }
  
-@@ -142,16 +114,12 @@ void FolderMan::unloadFolder(Folder *f)
+@@ -142,16 +115,12 @@ void FolderMan::unloadFolder(Folder *f)
      Q_ASSERT(f);
  
      _folders.removeAll(f);
@@ -97,7 +96,7 @@ index 9b03bab..b83f30b 100644
      }
  }
  
-@@ -169,17 +137,6 @@ void FolderMan::unloadAndDeleteAllFolders()
+@@ -169,17 +138,6 @@ void FolderMan::unloadAndDeleteAllFolders()
      }
  }
  
@@ -115,20 +114,7 @@ index 9b03bab..b83f30b 100644
  
  std::optional<qsizetype> FolderMan::loadFolders()
  {
-@@ -201,11 +158,7 @@ std::optional<qsizetype> FolderMan::loadFolders()
-             // TODO: Must do better error handling
-             qFatal("Could not load plugin");
-         }
--        auto account = AccountManager::instance()->account(folderDefinition.accountUUID());
--        if (account.isNull()) {
--            qFatal("Could not load account");
--        }
--        addFolderInternal(std::move(folderDefinition), account, std::move(vfs));
-+        qFatal("Loading folders from settings needs the account manager, which is not built here");
-     }
-     settings.endArray();
- 
-@@ -235,34 +188,20 @@ void FolderMan::saveFolders()
+@@ -235,34 +193,20 @@ void FolderMan::saveFolders()
  bool FolderMan::ensureJournalGone(const QString &journalDbFile)
  {
      // remove the old journal file
@@ -165,7 +151,7 @@ index 9b03bab..b83f30b 100644
      }
  }
  
-@@ -277,7 +216,6 @@ void FolderMan::scheduleAllFolders()
+@@ -277,7 +221,6 @@ void FolderMan::scheduleAllFolders()
  
  void FolderMan::slotSyncOnceFileUnlocks(const QString &path, FileSystem::LockMode mode)
  {
@@ -173,7 +159,7 @@ index 9b03bab..b83f30b 100644
  }
  
  void FolderMan::slotIsConnectedChanged()
-@@ -402,13 +340,9 @@ Folder *FolderMan::addFolderInternal(
+@@ -402,13 +345,9 @@ Folder *FolderMan::addFolderInternal(
  
      // See matching disconnects in unloadFolder().
      if (!folder->hasSetupError()) {
@@ -187,7 +173,7 @@ index 9b03bab..b83f30b 100644
      }
      return folder;
  }
-@@ -531,7 +465,7 @@ static QString checkPathForSyncRootMarkingRecursive(const QString &path, FolderM
+@@ -531,7 +470,7 @@ static QString checkPathForSyncRootMarkingRecursive(const QString &path, FolderM
  {
      std::pair<QString, QUuid> existingTags = Utility::getDirectorySyncRootMarkings(path);
      if (!existingTags.first.isEmpty()) {
@@ -196,7 +182,7 @@ index 9b03bab..b83f30b 100644
              // another application uses this as spaces root folder
              return FolderMan::tr("The folder »%1« is already in use by application %2!").arg(path, existingTags.first);
          }
-@@ -700,12 +634,6 @@ void FolderMan::setIgnoreHiddenFiles(bool ignore)
+@@ -700,12 +639,6 @@ void FolderMan::setIgnoreHiddenFiles(bool ignore)
      saveFolders();
  }
  
@@ -209,7 +195,7 @@ index 9b03bab..b83f30b 100644
  void FolderMan::slotReloadSyncOptions()
  {
      for (auto *f : std::as_const(_folders)) {
-@@ -751,7 +679,7 @@ Folder *FolderMan::addFolderFromFolderWizardResult(const AccountStatePtr &accoun
+@@ -751,7 +684,7 @@ Folder *FolderMan::addFolderFromFolderWizardResult(const AccountStatePtr &accoun
  
  QString FolderMan::suggestSyncFolder(NewFolderType folderType, const QUuid &accountUuid)
  {

@@ -11,19 +11,20 @@
 #include <rice/stl.hpp>
 
 #include <libsync/account.h>
-#include <libsync/capabilities.h>
-#include <libsync/common/version.h>
-#include <libsync/creds/abstractcredentials.h>
 #include <libsync/creds/credentialmanager.h>
 
 #include <qt6keychain/keychain.h>
 
 #include <QCoreApplication>
+#include <QEventLoop>
 #include <QString>
 #include <QStringList>
 #include <QUrl>
+#include <QTimer>
 #include <QUuid>
 #include <QVariant>
+
+#include <memory>
 
 namespace OCC {
 // Defined in src/gui/main.cpp, which the patches reduce to the non-UI bootstrap.
@@ -355,121 +356,142 @@ namespace Rice::detail
 
 using namespace Rice;
 
+namespace {
+constexpr int keychainTimeoutMsC = 30000;
+
+// QtKeychain queues its work onto the Qt event loop. Before OpenVFS.start there is no
+// loop, so a credential operation creates a temporary application, runs the job to
+// completion, and tears the application down again.
+class ApplicationScope
+{
+public:
+    ApplicationScope()
+    {
+        if (QCoreApplication::instance()) {
+            return;
+        }
+
+        static int argc = 1;
+        static char name[] = "openvfs-rb";
+        static char *argv[] = {name, nullptr};
+        _application = std::make_unique<QCoreApplication>(argc, argv);
+        _application->setApplicationName(QStringLiteral("openvfs-rb"));
+    }
+
+    ~ApplicationScope()
+    {
+        if (!_application) {
+            return;
+        }
+
+        _application.reset();
+        // QCoreApplication clears the application name when it is destroyed.
+        QCoreApplication::setApplicationName(QStringLiteral("openvfs-rb"));
+    }
+
+private:
+    std::unique_ptr<QCoreApplication> _application;
+};
+
+bool wait_for(QKeychain::Job *job)
+{
+    QEventLoop loop;
+    QObject::connect(job, &QKeychain::Job::finished, &loop, &QEventLoop::quit);
+    QTimer::singleShot(keychainTimeoutMsC, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    return job->error() == QKeychain::NoError;
+}
+
+bool credential_set(OCC::CredentialManager &manager, const QString &key, const QVariant &data)
+{
+    if (!data.isValid()) {
+        return false;
+    }
+
+    ApplicationScope application;
+    return wait_for(manager.set(key, data));
+}
+
+bool credential_remove(OCC::CredentialManager &manager, const QString &key)
+{
+    ApplicationScope application;
+    if (!manager.contains(key)) {
+        return false;
+    }
+
+    return wait_for(manager.remove(key));
+}
+
+bool credential_contains(const OCC::CredentialManager &manager, const QString &key)
+{
+    ApplicationScope application;
+    return manager.contains(key);
+}
+
+QVariant credential_get(OCC::CredentialManager &manager, const QString &key)
+{
+    ApplicationScope application;
+    auto *job = manager.get(key);
+
+    QEventLoop loop;
+    QObject::connect(job, &OCC::CredentialJob::finished, &loop, &QEventLoop::quit);
+    QTimer::singleShot(keychainTimeoutMsC, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    if (job->error() != QKeychain::NoError) {
+        return {};
+    }
+
+    return job->data();
+}
+}
+
 extern "C" void Init_occ()
 {
-    Module rb_mOCC = define_module_under(define_module("OpenVFS"), "OCC");
-    rb_mOCC.define_constant("DESKTOP_VERSION", OCC::Version::displayString().toStdString());
-    rb_mOCC.define_constant("DESKTOP_REVISION", OCC::Version::gitSha().toStdString());
+    Rice::detail::cpp_protect([] {
+        QCoreApplication::setApplicationName(QStringLiteral("openvfs-rb"));
 
-    // -----------------------------------------------------------------------------------------
-    // The desktop's entry point: src/gui/main.cpp, reduced by the patches to its non-UI
-    // bootstrap. It takes the arguments the command line already accepts.
-    // -----------------------------------------------------------------------------------------
+        Module rb_mOpenVFS = define_module("OpenVFS");
 
-    rb_mOCC.define_module_function("init", &OCC::init, Arg("arguments"));
+        // -----------------------------------------------------------------------------------------
+        // The desktop's entry point: src/gui/main.cpp, reduced by the patches to its non-UI
+        // bootstrap. It takes the arguments the command line already accepts.
+        // -----------------------------------------------------------------------------------------
 
-    // -----------------------------------------------------------------------------------------
-    // Errors the keychain reports.
-    // -----------------------------------------------------------------------------------------
+        rb_mOpenVFS.define_module_function(
+            "start",
+            [](const QStringList &arguments) {
+                return OCC::init(QStringList{QStringLiteral("openvfs-rb")} + arguments);
+            },
+            Arg("arguments") = QStringList{});
 
-    Enum<QKeychain::Error> rb_cKeychainError =
-        define_enum_under<QKeychain::Error>("KeychainError", rb_mOCC)
-        .define_value("NoError", QKeychain::NoError)
-        .define_value("EntryNotFound", QKeychain::EntryNotFound)
-        .define_value("CouldNotDeleteEntry", QKeychain::CouldNotDeleteEntry)
-        .define_value("AccessDeniedByUser", QKeychain::AccessDeniedByUser)
-        .define_value("AccessDenied", QKeychain::AccessDenied)
-        .define_value("NoBackendAvailable", QKeychain::NoBackendAvailable)
-        .define_value("NotImplemented", QKeychain::NotImplemented)
-        .define_value("OtherError", QKeychain::OtherError);
+        // -----------------------------------------------------------------------------------------
+        // OCC::CredentialManager - the account's keychain. Each operation runs the keychain job
+        // to completion, so Ruby never sees a Qt job object.
+        // -----------------------------------------------------------------------------------------
 
-    Data_Type<QKeychain::Job> rb_cKeychainJob =
-        define_class_under<QKeychain::Job>(rb_mOCC, "KeychainJob")
-        .define_method("start", &QKeychain::Job::start)
-        .define_method("service", &QKeychain::Job::service)
-        .define_method("error", &QKeychain::Job::error)
-        .define_method("error_string", &QKeychain::Job::errorString)
-        .define_method("key", &QKeychain::Job::key)
-        .define_method("key=", &QKeychain::Job::setKey, Arg("key"))
-        .define_method("auto_delete?", &QKeychain::Job::autoDelete)
-        .define_method("auto_delete=", &QKeychain::Job::setAutoDelete, Arg("auto_delete"))
-        .define_method("insecure_fallback?", &QKeychain::Job::insecureFallback)
-        .define_method("insecure_fallback=", &QKeychain::Job::setInsecureFallback, Arg("insecure_fallback"));
+        Data_Type<OCC::CredentialManager> rb_cCredentialManager =
+            define_class_under<OCC::CredentialManager>(rb_mOpenVFS, "CredentialManager")
+            .define_method("set", &credential_set, Arg("key"), Arg("data"))
+            .define_method("get", &credential_get, Arg("key"))
+            .define_method("remove", &credential_remove, Arg("key"))
+            .define_method("contains?", &credential_contains, Arg("key"));
 
-    // -----------------------------------------------------------------------------------------
-    // OCC::CredentialManager - the account's keychain.
-    // -----------------------------------------------------------------------------------------
+        // -----------------------------------------------------------------------------------------
+        // OCC::Account - one configured server connection.
+        // -----------------------------------------------------------------------------------------
 
-    Data_Type<OCC::CredentialJob> rb_cCredentialJob =
-        define_class_under<OCC::CredentialJob>(rb_mOCC, "CredentialJob")
-        .define_method("key", &OCC::CredentialJob::key)
-        .define_method("error", &OCC::CredentialJob::error)
-        .define_method("error_string", &OCC::CredentialJob::errorString)
-        .define_method("data", &OCC::CredentialJob::data);
-
-    Data_Type<OCC::CredentialManager> rb_cCredentialManager =
-        define_class_under<OCC::CredentialManager>(rb_mOCC, "CredentialManager")
-        .define_method("get", &OCC::CredentialManager::get, Arg("key"))
-        .define_method("set", &OCC::CredentialManager::set, Arg("key"), Arg("data"))
-        .define_method("remove", &OCC::CredentialManager::remove, Arg("key"))
-        .define_method("contains?", &OCC::CredentialManager::contains, Arg("key"))
-        .define_method("account", &OCC::CredentialManager::account);
-
-    // -----------------------------------------------------------------------------------------
-    // OCC::Account - one configured server connection.
-    // -----------------------------------------------------------------------------------------
-
-    Data_Type<OCC::AbstractCredentials> rb_cAbstractCredentials =
-        define_class_under<OCC::AbstractCredentials>(rb_mOCC, "AbstractCredentials")
-        .define_method("ready?", &OCC::AbstractCredentials::ready)
-        .define_method("was_fetched?", &OCC::AbstractCredentials::wasFetched)
-        .define_method("fetch_from_keychain", &OCC::AbstractCredentials::fetchFromKeychain)
-        .define_method("invalidate_token", &OCC::AbstractCredentials::invalidateToken)
-        .define_method("forget_sensitive_data", &OCC::AbstractCredentials::forgetSensitiveData);
-
-    Data_Type<OCC::Capabilities> rb_cCapabilities =
-        define_class_under<OCC::Capabilities>(rb_mOCC, "Capabilities");
-
-    Data_Type<OCC::Account> rb_cAccount =
-        define_class_under<OCC::Account>(rb_mOCC, "Account")
-        .define_singleton_function("common_cache_directory", &OCC::Account::commonCacheDirectory)
-        .define_singleton_function("common_cache_directory=", &OCC::Account::setCommonCacheDirectory,
-            Arg("directory"))
-        .define_method("uuid", &OCC::Account::uuid)
-        .define_method("url", &OCC::Account::url)
-        .define_method("url=", &OCC::Account::setUrl, Arg("url"))
-        .define_method("host_name", &OCC::Account::hostName)
-        .define_method("dav_display_name", &OCC::Account::davDisplayName)
-        .define_method("dav_display_name=", &OCC::Account::setDavDisplayName, Arg("display_name"))
-        .define_method("display_name_with_host", &OCC::Account::displayNameWithHost)
-        .define_method("default_sync_root", &OCC::Account::defaultSyncRoot)
-        .define_method("default_sync_root=", &OCC::Account::setDefaultSyncRoot, Arg("sync_root"))
-        .define_method("default_sync_root?", &OCC::Account::hasDefaultSyncRoot)
-        .define_method("credential_manager", &OCC::Account::credentialManager)
-        .define_method("credentials", &OCC::Account::credentials)
-        .define_method("credentials=", &OCC::Account::setCredentials, Arg("credentials").keepAlive())
-        .define_method("capabilities", &OCC::Account::capabilities)
-        .define_method("capabilities=", &OCC::Account::setCapabilities, Arg("capabilities"))
-        .define_method("capabilities?", &OCC::Account::hasCapabilities)
-        .define_method("server_support_level", &OCC::Account::serverSupportLevel)
-        .define_method("http2_supported?", &OCC::Account::isHttp2Supported)
-        .define_method("http2_supported=", &OCC::Account::setHttp2Supported, Arg("supported"))
-        .define_method("clear_cookie_jar", &OCC::Account::clearCookieJar)
-        .define_method("clear_am_cache", &OCC::Account::clearAMCache)
-        .define_method("invalid_credentials_encountered", &OCC::Account::invalidCredentialsEncountered);
-
-    Enum<OCC::Account::ServerSupportLevel> rb_cServerSupportLevel =
-        define_enum_under<OCC::Account::ServerSupportLevel>("ServerSupportLevel", rb_cAccount)
-        .define_value("Supported", OCC::Account::ServerSupportLevel::Supported)
-        .define_value("Unsupported", OCC::Account::ServerSupportLevel::Unsupported)
-        .define_value("Unknown", OCC::Account::ServerSupportLevel::Unknown);
-
-    // Account::create hands back a QSharedPointer, and every libsync class takes one.
-    // Wrapping the pointer itself - rather than what it points at - is what keeps the
-    // reference count alive while Ruby holds it.
-    Data_Type<OCC::AccountPtr> rb_cAccountPtr =
-        define_class_under<OCC::AccountPtr>(rb_mOCC, "AccountPtr")
-        .define_singleton_function("create", &OCC::Account::create, Arg("uuid"))
-        .define_method("get", [](OCC::AccountPtr& self) { return self.data(); })
-        .define_method("null?", [](const OCC::AccountPtr& self) { return self.isNull(); });
+        // Account::create hands back a QSharedPointer, and every libsync class takes one.
+        // Wrapping the pointer itself - rather than what it points at - is what keeps the
+        // reference count alive while Ruby holds it.
+        Data_Type<OCC::AccountPtr> rb_cAccount =
+            define_class_under<OCC::AccountPtr>(rb_mOpenVFS, "Account")
+            .define_singleton_function("create", &OCC::Account::create, Arg("uuid"))
+            .define_method("uuid", [](const OCC::AccountPtr &self) { return self->uuid(); })
+            .define_method("url", [](const OCC::AccountPtr &self) { return self->url(); })
+            .define_method("url=", [](OCC::AccountPtr &self, const QUrl &url) { self->setUrl(url); }, Arg("url"))
+            .define_method("credential_manager", [](const OCC::AccountPtr &self) { return self->credentialManager(); },
+                Return().keepAlive());
+    });
 }

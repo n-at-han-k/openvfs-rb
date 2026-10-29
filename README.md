@@ -30,72 +30,31 @@ OpenVFS development headers and `libopenvfs` are required to build the
 extension. In this repository's Nix development shell they are provided by the
 locked OpenVFS source input.
 
-## OpenCloud Desktop uploads
+## OpenCloud Desktop sync client
 
-`OpenVFS::OCC` wraps the desktop client's `OCC::Account` and `OCC::PUTFileJob`
-upload path. Give the account a WebDAV **space root URL** and an access token:
+`OpenVFS` wraps the desktop client's account and keychain. Configure a folder, store the account's credential, then run the client:
 
 ```ruby
 require "openvfs/occ"
 
-account = OpenVFS::OCC::Account.new(
-  "https://cloud.example/remote.php/dav/spaces/SPACE_ID",
-  ENV.fetch("OPENCLOUD_ACCESS_TOKEN"),
+uuid = OpenVFS.configure(
+  "/local/folder",
+  url: "https://cloud.example",
+  remote_path: "/remote.php/dav/files/user",
 )
 
-created = account.upload_new("/local/report.txt", "documents/report.txt")
-raise created.error unless created.ok?
+account = OpenVFS::Account.create(uuid)
+account.url = "https://cloud.example"
+account.credential_manager.set("http/oauthtoken", ENV.fetch("OPENCLOUD_ACCESS_TOKEN"))
 
-# After editing the local file, replace the revision previously uploaded.
-updated = account.upload_changed(
-  "/local/report.txt",
-  "documents/report.txt",
-  etag: created.etag,
-)
-raise updated.error unless updated.ok?
-
-updated.etag
-updated.file_id
+OpenVFS.start(["--logfile", "-"])
 ```
 
-`upload_new` sends `If-None-Match: *`. `upload_changed` requires the previous
-ETag and sends `If-Match`; a stale revision returns HTTP 412 and `ok? == false`.
-Paths are relative to the account URL, and the remote parent directory must
-already exist. Uploads stream the file through the desktop client's native PUT
-job. The returned ETag is unquoted, matching OpenVFS placeholder metadata.
-
-Both methods return an `OpenVFS::OCC::UploadResult` with `ok?`, `http_status`,
-`network_error`, `etag`, `file_id`, `request_id`, `response_body`, `error`,
-`bytes_sent`, `total_bytes`, `elapsed_ms`, `aborted?`, and `timed_out?`.
-They accept `timeout_ms:` (default: 300,000 milliseconds).
-
-For explicit job control:
-
-```ruby
-job = OpenVFS::OCC::PUTFileJob.new(account, "/local/report.txt", "documents/report.txt", updated.etag)
-job.start
-# job.abort cancels an active upload.
-result = job.wait
-job.finished?
-job.result
-```
-
-`wait` drives Qt's event loop and releases Ruby's GVL while waiting. Use these
-objects on the thread that loaded `openvfs/occ`. The wrapper retains the account
-for each job and copies the response before Qt deletes its completed job.
-
-Credentials are supplied by the Ruby caller and held in memory. Set
-`account.access_token = token` between uploads to replace an expired token.
-The API performs explicit PUT uploads; filesystem monitoring, sync-journal
-updates, OAuth login/refresh, and the desktop's resumable TUS orchestration are
-outside this API.
+`OpenVFS.configure` writes `~/.config/openvfs-rb/openvfs-rb.cfg`; it does not touch the keychain. `OpenVFS::Account.create` returns the wrapped account, `account.url=` sets the server, and `account.credential_manager` exposes `set`, `get`, `remove` and `contains?`. The keychain methods block until QtKeychain's job finishes, so no event loop needs to be running. For a server that enables HTTP Basic authentication, store the complete `Basic ...` header instead of a bearer token. `OpenVFS.start` calls the desktop's `OCC::init`, which runs the sync client's event loop and does not return until the client exits; run it in its own process.
 
 ### Building the desktop subset
 
-The locked `desktop` flake input is built into a small static library with Qt's
-generated meta-object code, using the patches under `patches/`. The patches isolate
-the PUT job and omit the account's desktop UI, space discovery, keychain, and
-disk-cache initialization for this build.
+The locked `desktop` flake input is built into a small static library with Qt's generated meta-object code, using the patches under `patches/`. The patches keep the sync engine and keychain, and omit the desktop UI, QML, translations and unrelated plugins.
 
 ```sh
 nix develop --command ruby -C ext/openvfs extconf.rb
@@ -108,29 +67,22 @@ nix develop --command bundle exec sus
 The development shell provides `OPENCLOUD_UPLOAD_PREFIX` and `pkg-config`
 metadata. Outside the shell, install that subset and its Qt 6 development
 dependencies, then make `opencloud-upload.pc` visible to `pkg-config`.
-`OpenVFS::OCC::DESKTOP_VERSION` and `DESKTOP_REVISION` identify the compiled
-desktop source.
+The installed `opencloud-upload.pc`, headers and static library are what the extension builds against.
 
 ### Local OpenCloud server
 
-Integration tests that exercise the upload path against a real OpenCloud server
-live in `test/openvfs/occ_real_server.rb`. They register a temporary local folder
-with OpenVFS, create a document in it, and upload it through the desktop upload
-job.
+The integration test in `test/openvfs/sync.rb` configures a temporary local folder, starts the client, and checks that a file dropped into the folder reaches a real OpenCloud server.
 
-The suite skips those tests while no server answers `OPENCLOUD_TEST_URL`, so the
-default run stays hermetic.
+The test skips while no server answers `OPENCLOUD_URL`, so the default run stays hermetic.
 
 ```sh
 docker compose up -d opencloud
-nix develop --command bundle exec sus test/openvfs/occ_real_server.rb
+nix develop --command bundle exec sus test/openvfs/sync.rb
 ```
 
 The compose file starts `opencloudeu/opencloud-rolling:9.0.0` with WebDAV basic
 authentication enabled and listens on `127.0.0.1:${OPENCLOUD_PORT:-18280}`.
-Override the credentials with `OPENCLOUD_TEST_USERNAME`, `OPENCLOUD_TEST_PASSWORD`,
-and `OPENCLOUD_TEST_SPACE_ID` when the default admin user is not the account you
-want to upload into.
+Override the credentials with `OPENCLOUD_USER` and `OPENCLOUD_PASSWORD` when the default admin user is not the account you want to sync.
 
 ## Contributing
 
