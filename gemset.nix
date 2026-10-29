@@ -202,10 +202,10 @@
     groups = ["default"];
     platforms = [];
     source = {
-      path = ../../../nix/store/x3dv9p9f1la7myqf8136212vy7ayf3vf-gemfile-and-lockfile;
+      path = ./.;
       type = "path";
     };
-    version = "0.1.0";
+    version = "1.0.0";
   };
   parallel = {
     groups = ["default" "lint"];

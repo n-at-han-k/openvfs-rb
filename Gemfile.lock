@@ -1,7 +1,7 @@
 PATH
-  remote: ../../../nix/store/x3dv9p9f1la7myqf8136212vy7ayf3vf-gemfile-and-lockfile
+  remote: .
   specs:
-    openvfs-rb (0.1.0)
+    openvfs-rb (1.0.0)
       gem_kit (~> 0.2)
       rice (~> 4.0)
 
@@ -97,7 +97,7 @@ DEPENDENCIES
   bake-test
   covered
   decode
-  gem_kit-release
+  gem_kit-release (~> 0.3)
   openvfs-rb!
   rice
   rubocop
