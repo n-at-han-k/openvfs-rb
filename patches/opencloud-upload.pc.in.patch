@@ -1,0 +1,16 @@
+diff --git a/opencloud-upload.pc.in b/opencloud-upload.pc.in
+new file mode 100644
+index 0000000..23bd95b
+--- /dev/null
++++ b/opencloud-upload.pc.in
+@@ -0,0 +1,10 @@
++prefix=@CMAKE_INSTALL_PREFIX@
++libdir=@CMAKE_INSTALL_FULL_LIBDIR@
++includedir=@CMAKE_INSTALL_FULL_INCLUDEDIR@/opencloud-upload
++
++Name: opencloud-upload
++Description: OpenCloud Desktop watching, discovery and upload subset
++Version: @MIRALL_VERSION@
++Requires: Qt6Core Qt6Concurrent Qt6Gui Qt6Network sqlite3
++Libs: -L${libdir} -lopencloud-upload -L@QTKEYCHAIN_LIBDIR@ -lqt6keychain -lz
++Cflags: -I${includedir} -I${includedir}/libsync -I${includedir}/gui -I${includedir}/cmd -I@QTKEYCHAIN_INCLUDE_DIR@ -DOPENCLOUD_BUILT_AS_STATIC -DQT_NO_KEYWORDS

@@ -14,12 +14,29 @@
       url = "github:opencloud-eu/desktop";
       flake = false;
     };
+    libregraph = {
+      url = "github:opencloud-eu/libre-graph-api-cpp-qt-client/v1.0.8";
+      flake = false;
+    };
   };
-  outputs = { self, mine, nixpkgs, utils, openvfs, desktop }:
+  outputs = { self, mine, nixpkgs, utils, openvfs, desktop, libregraph }:
     utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
         lib = mine.lib.${system};
+
+        # Desktop 4.0.1 requires LibreGraphAPI 1.0.8; nixpkgs only packages 1.0.4,
+        # so overlay the nixpkgs package with the pinned source. sourceRoot has to be
+        # overridden too because the original derives it from the fetchFromGitHub name.
+        libreGraphApi = pkgs.libre-graph-api-cpp-qt-client.overrideAttrs (old: {
+          version = "1.0.8";
+          src = libregraph;
+          sourceRoot = "source/client";
+          postPatch = ''
+            substituteInPlace CMakeLists.txt \
+              --replace-fail "cmake_minimum_required(VERSION 3.5)" "cmake_minimum_required(VERSION 3.10)"
+          '';
+        });
 
         desktopUpload = pkgs.stdenv.mkDerivation {
           pname = "opencloud-upload";
@@ -32,7 +49,17 @@
           patches = pkgs.lib.filesystem.listFilesRecursive ./patches;
 
           nativeBuildInputs = [ pkgs.cmake pkgs.ninja pkgs.pkg-config ];
-          buildInputs = [ pkgs.qt6.qtbase pkgs.sqlite pkgs.kdePackages.qtkeychain ];
+          # ECM is a buildInput, not a nativeBuildInput: cmake's setup hook only adds
+          # targetOffset inputs to CMAKE_PREFIX_PATH, so a native one is never found
+          # by find_package(ECM).
+          buildInputs = [
+            pkgs.qt6.qtbase
+            pkgs.sqlite
+            pkgs.zlib
+            pkgs.kdePackages.qtkeychain
+            pkgs.kdePackages.extra-cmake-modules
+            libreGraphApi
+          ];
           dontWrapQtApps = true;
           strictDeps = true;
 

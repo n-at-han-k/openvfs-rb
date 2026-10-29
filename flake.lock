@@ -16,6 +16,23 @@
         "type": "github"
       }
     },
+    "libregraph": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1790883188,
+        "narHash": "sha256-Lskgu+fkHwv7U3Pd3BIefpDWml32gXtBzMhKy4v6+zg=",
+        "owner": "opencloud-eu",
+        "repo": "libre-graph-api-cpp-qt-client",
+        "rev": "7a697328c93eea765a1ad5518cc8cd679bc563d4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "opencloud-eu",
+        "ref": "v1.0.8",
+        "repo": "libre-graph-api-cpp-qt-client",
+        "type": "github"
+      }
+    },
     "mine": {
       "inputs": {
         "nixpkgs": [
@@ -69,6 +86,7 @@
     "root": {
       "inputs": {
         "desktop": "desktop",
+        "libregraph": "libregraph",
         "mine": "mine",
         "nixpkgs": "nixpkgs",
         "openvfs": "openvfs",

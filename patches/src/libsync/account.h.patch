@@ -1,0 +1,80 @@
+diff --git a/src/libsync/account.h b/src/libsync/account.h
+index f0957d3..f7c5216 100644
+--- a/src/libsync/account.h
++++ b/src/libsync/account.h
+@@ -21,13 +21,12 @@
+ #include "appprovider.h"
+ #include "capabilities.h"
+ #include "jobqueue.h"
+-#include "resources/resources.h"
+ 
+ #include <QByteArray>
++#include <QIcon>
+ #include <QGradient>
+ #include <QNetworkAccessManager>
+ #include <QNetworkCookie>
+-#include <QNetworkDiskCache>
+ #include <QNetworkRequest>
+ #include <QPixmap>
+ #include <QSharedPointer>
+@@ -38,7 +37,6 @@
+ #include <QSslSocket>
+ #include <QUrl>
+ #include <QUuid>
+-#include <QtQmlIntegration/QtQmlIntegration>
+ 
+ class QSettings;
+ class QNetworkReply;
+@@ -71,8 +69,6 @@ class OPENCLOUD_SYNC_EXPORT Account : public QObject
+     Q_PROPERTY(bool hasAvatar READ hasAvatar NOTIFY avatarChanged)
+     Q_PROPERTY(QGradient::Preset avatarGradient READ avatarGradient NOTIFY displayNameChanged)
+     Q_PROPERTY(QUrl url READ url NOTIFY urlChanged)
+-    QML_ELEMENT
+-    QML_UNCREATABLE("Only created in the C++ code")
+ 
+ public:
+     /**
+@@ -121,6 +117,7 @@ public:
+     QString hostName() const;
+ 
+     /** Holds the accounts credentials */
++    CredentialManager *credentialManager() const;
+     AbstractCredentials *credentials() const;
+     void setCredentials(AbstractCredentials *cred);
+ 
+@@ -177,16 +174,13 @@ public:
+ 
+     QUuid uuid() const;
+ 
+-    CredentialManager *credentialManager() const;
+ 
+-    GraphApi::SpacesManager *spacesManager() const;
+ 
+     /**
+      * We encountered an authentication error.
+      */
+     void invalidCredentialsEncountered();
+ 
+-    ResourcesCache *resourcesCache() const;
+ 
+ public Q_SLOTS:
+     /// Used when forgetting credentials
+@@ -236,17 +230,14 @@ private:
+     QSet<QSslCertificate> _approvedCerts;
+     Capabilities _capabilities;
+     QPointer<AccessManager> _am;
+-    QPointer<QNetworkDiskCache> _networkCache = nullptr;
+-    QPointer<ResourcesCache> _resourcesCache;
+     QScopedPointer<AbstractCredentials> _credentials;
+     bool _http2Supported = true;
+ 
+     JobQueue _jobQueue;
+     JobQueueGuard _queueGuard;
+-    CredentialManager *_credentialManager;
++    CredentialManager *_credentialManager = nullptr;
+     AppProvider _appProvider;
+ 
+-    GraphApi::SpacesManager *_spacesManager = nullptr;
+     friend class AccountManager;
+ };
+ }

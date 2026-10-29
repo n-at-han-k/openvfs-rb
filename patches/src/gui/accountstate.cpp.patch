@@ -1,0 +1,126 @@
+diff --git a/src/gui/accountstate.cpp b/src/gui/accountstate.cpp
+index fc3ca1b..c73e437 100644
+--- a/src/gui/accountstate.cpp
++++ b/src/gui/accountstate.cpp
+@@ -15,27 +15,16 @@
+ 
+ #include "accountstate.h"
+ #include "account.h"
+-#include "application.h"
+ #include "configfile.h"
+ #include "fetchserversettings.h"
+-#include "fonticon.h"
+-#include "guiutility.h"
+-#include "resources/jsontheme.h"
+ 
+ #include "libsync/creds/abstractcredentials.h"
+-#include "libsync/creds/httpcredentials.h"
+ 
+ #include "gui/folderman.h"
+-#include "gui/fonticonmessagebox.h"
+ #include "gui/networkinformation.h"
+-#include "gui/settingsdialog.h"
+-#include "gui/tlserrordialog.h"
+ 
+ #include "logger.h"
+-#include "socketapi/socketapi.h"
+-#include "theme.h"
+ 
+-#include <QMessageBox>
+ #include <QRandomGenerator>
+ #include <QSettings>
+ #include <QTimer>
+@@ -77,11 +66,6 @@ AccountState::AccountState(AccountPtr account)
+         this, &AccountState::slotCredentialsAsked);
+     connect(account.data(), &Account::unknownConnectionState, this, [this] { checkConnectivity(true); });
+ 
+-    connect(account.data(), &Account::capabilitiesChanged, this, [this] {
+-        if (_account->capabilities().checkForUpdates() && isOcApp()) {
+-            ocApp()->updateNotifier()->checkForUpdates(_account);
+-        }
+-    });
+ 
+ 
+     connect(NetworkInformation::instance(), &NetworkInformation::reachabilityChanged, this, [this](NetworkInformation::Reachability reachability) {
+@@ -171,21 +155,15 @@ AccountState::AccountState(AccountPtr account)
+         setState(State::SignedOut);
+     });
+ 
+-    if (FolderMan::instance()) {
+-        FolderMan::instance()->socketApi()->registerAccount(account);
+-    }
+-
+-    connect(account.data(), &Account::appProviderErrorOccured, this, [](const QString &error) {
+-        QMessageBox *msgBox = new FontIconMessageBox(
+-            {Resources::FontIcon::DefaultGlyphes::Warning}, Resources::JsonTheme::instance().applicationDisplayName(), error, {}, ocApp()->settingsDialog());
+-        msgBox->setAttribute(Qt::WA_DeleteOnClose);
+-        ocApp()->showSettings();
+-        msgBox->open();
+-    });
+ }
+ 
+ AccountState::~AccountState() { }
+ 
++AccountState *AccountState::create(AccountPtr account)
++{
++    return new AccountState(account);
++}
++
+ std::unique_ptr<AccountState> AccountState::loadFromSettings(AccountPtr account, const QSettings &settings)
+ {
+     auto accountState = std::unique_ptr<AccountState>(new AccountState(account));
+@@ -375,40 +353,6 @@ void AccountState::checkConnectivity(bool blockJobs)
+     connect(_connectionValidator, &ConnectionValidator::connectionResult,
+         this, &AccountState::slotConnectionValidatorResult);
+ 
+-    connect(_connectionValidator, &ConnectionValidator::sslErrors, this, [blockJobs, this](const QList<QSslError> &errors) {
+-        if (NetworkInformation::instance()->isBehindCaptivePortal()) {
+-            return;
+-        }
+-        if (!_tlsDialog) {
+-            // ignore errors for already accepted certificates
+-            auto filteredErrors = _account->accessManager()->filterSslErrors(errors);
+-            if (!filteredErrors.isEmpty()) {
+-                _tlsDialog = new TlsErrorDialog(filteredErrors, _account->url().host(), ocApp()->settingsDialog());
+-                _tlsDialog->setAttribute(Qt::WA_DeleteOnClose);
+-                QSet<QSslCertificate> certs;
+-                certs.reserve(filteredErrors.size());
+-                for (const auto &error : std::as_const(filteredErrors)) {
+-                    certs << error.certificate();
+-                }
+-                connect(_tlsDialog, &TlsErrorDialog::accepted, _tlsDialog, [certs, blockJobs, this]() {
+-                    _account->addApprovedCerts(certs);
+-                    _tlsDialog.clear();
+-                    // force a new _connectionValidator
+-                    if (_connectionValidator) {
+-                        _connectionValidator->deleteLater();
+-                        _connectionValidator.clear();
+-                    }
+-                    checkConnectivity(blockJobs);
+-                });
+-                connect(_tlsDialog, &TlsErrorDialog::rejected, this, [certs, this]() {
+-                    setState(SignedOut);
+-                });
+-
+-                ocApp()->showSettings();
+-                _tlsDialog->open();
+-            }
+-        }
+-    });
+     ConnectionValidator::ValidationMode mode = ConnectionValidator::ValidationMode::ValidateAuthAndUpdate;
+     if (isConnected()) {
+         // Use a small authed propfind as a minimal ping when we're
+@@ -491,13 +435,6 @@ void AccountState::slotInvalidCredentials()
+         if (account()->credentials()->ready()) {
+             account()->credentials()->invalidateToken();
+         }
+-        if (auto creds = qobject_cast<HttpCredentials *>(account()->credentials())) {
+-            qCInfo(lcAccountState) << u"refreshing oauth";
+-            if (creds->refreshAccessToken()) {
+-                return;
+-            }
+-            qCInfo(lcAccountState) << u"refreshing oauth failed";
+-        }
+         qCInfo(lcAccountState) << u"restart oauth";
+         account()->credentials()->restartOauth();
+         setState(Connecting);

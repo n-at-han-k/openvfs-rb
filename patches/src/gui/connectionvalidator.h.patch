@@ -1,0 +1,24 @@
+diff --git a/src/gui/connectionvalidator.h b/src/gui/connectionvalidator.h
+index a7fac33..89086be 100644
+--- a/src/gui/connectionvalidator.h
++++ b/src/gui/connectionvalidator.h
+@@ -14,10 +14,7 @@
+ 
+ #pragma once
+ 
+-#include "gui/opencloudguilib.h"
+-
+ #include "common/chronoelapsedtimer.h"
+-#include "gui/guiutility.h"
+ #include "libsync/accountfwd.h"
+ 
+ #include <QNetworkReply>
+@@ -29,7 +26,7 @@
+ 
+ namespace OCC {
+ 
+-class OPENCLOUD_GUI_EXPORT ConnectionValidator : public QObject
++class ConnectionValidator : public QObject
+ {
+     Q_OBJECT
+ public:

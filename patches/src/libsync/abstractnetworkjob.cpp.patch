@@ -1,0 +1,12 @@
+diff --git a/src/libsync/abstractnetworkjob.cpp b/src/libsync/abstractnetworkjob.cpp
+index 8b5930d..8338578 100644
+--- a/src/libsync/abstractnetworkjob.cpp
++++ b/src/libsync/abstractnetworkjob.cpp
+@@ -15,6 +15,7 @@
+ 
+ #include <QAuthenticator>
+ #include <QNetworkRequest>
++#include <QXmlStreamReader>
+ 
+ #include "common/asserts.h"
+ #include "networkjobs.h"

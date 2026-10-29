@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index cb68fdf..abde8d3 100644
+index cb68fdf..fd34483 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -26,9 +26,8 @@ include(ECMSetupVersion)
@@ -9,7 +9,7 @@ index cb68fdf..abde8d3 100644
 -include(ECMQmlModule)
  
 -find_package(Qt6 COMPONENTS Core Concurrent Network Widgets Xml Quick QuickWidgets QuickControls2 Linguist REQUIRED)
-+find_package(Qt6 COMPONENTS Core Concurrent Network Xml REQUIRED)
++find_package(Qt6 COMPONENTS Core Concurrent Gui Network Xml REQUIRED)
  qt6_standard_project_setup(REQUIRES 6.8)
  
  

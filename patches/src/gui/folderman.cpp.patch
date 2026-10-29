@@ -1,27 +1,27 @@
 diff --git a/src/gui/folderman.cpp b/src/gui/folderman.cpp
-index 9b03bab..0362903 100644
+index 9b03bab..b83f30b 100644
 --- a/src/gui/folderman.cpp
 +++ b/src/gui/folderman.cpp
-@@ -14,6 +14,8 @@
+@@ -14,28 +14,23 @@
  
  #include "folderman.h"
  
 +#include <QCoreApplication>
 +
  #include "account.h"
- #include "accountmanager.h"
+-#include "accountmanager.h"
  #include "accountstate.h"
-@@ -22,20 +24,17 @@
+ #include "common/asserts.h"
+ #include "configfile.h"
  #include "gui/folder.h"
  #include "gui/folderdefinition.h"
  #include "gui/networkinformation.h"
 -#include "guiutility.h"
-+#include "common/utility.h"
  #include "libsync/syncengine.h"
- #include "lockwatcher.h"
+-#include "lockwatcher.h"
 -#include "resources/jsontheme.h"
  #include "scheduling/syncscheduler.h"
- #include "socketapi/socketapi.h"
+-#include "socketapi/socketapi.h"
  #include "syncresult.h"
 -#include "theme.h"
  
@@ -33,20 +33,107 @@ index 9b03bab..0362903 100644
  #include <QtCore>
  
  using namespace Qt::Literals::StringLiterals;
-@@ -99,8 +98,8 @@ FolderMan::FolderMan()
-             if (accountStatePtr->account()->hasDefaultSyncRoot()) {
-                 Folder::prepareFolder(accountStatePtr->account()->defaultSyncRoot(),
-                     AccountManager::instance()->accounts().size() == 1
+@@ -88,40 +83,17 @@ const SyncResult &TrayOverallStatusResult::overallStatus() const
+ FolderMan *FolderMan::_instance = nullptr;
+ 
+ FolderMan::FolderMan()
+-    : _lockWatcher(new LockWatcher)
+-    , _scheduler(new SyncScheduler(this))
+-    , _socketApi(new SocketApi)
++    : _scheduler(new SyncScheduler(this))
+ {
+-#ifdef Q_OS_WIN
+-    auto updateSyncRoots = [] {
+-        // set the metadata for a sync root, depending on the number of accounts
+-        for (const auto &accountStatePtr : AccountManager::instance()->accounts()) {
+-            if (accountStatePtr->account()->hasDefaultSyncRoot()) {
+-                Folder::prepareFolder(accountStatePtr->account()->defaultSyncRoot(),
+-                    AccountManager::instance()->accounts().size() == 1
 -                        ? Resources::JsonTheme::instance().applicationName()
 -                        : u"%1 - %2"_s.arg(Resources::JsonTheme::instance().applicationName(), accountStatePtr->account()->davDisplayName()),
-+                        ? QCoreApplication::applicationName()
-+                        : u"%1 - %2"_s.arg(QCoreApplication::applicationName(), accountStatePtr->account()->davDisplayName()),
-                     accountStatePtr->account()->davDisplayName(), true);
-             }
+-                    accountStatePtr->account()->davDisplayName(), true);
+-            }
+-        }
+-    };
+-    updateSyncRoots();
+-    connect(AccountManager::instance(), &AccountManager::accountAdded, this, updateSyncRoots);
+-#endif
+-    connect(AccountManager::instance(), &AccountManager::accountRemoved,
+-        this, &FolderMan::slotRemoveFoldersForAccount);
+-
+-    connect(_lockWatcher.data(), &LockWatcher::fileUnlocked, this, [this](const QString &path, FileSystem::LockMode) {
+-        if (Folder *f = folderForPath(path)) {
+-            // Treat this equivalently to the file being reported by the file watcher
+-            f->slotWatchedPathsChanged({path}, Folder::ChangeReason::UnLock);
+-        }
+-    });
+ }
+ 
+ FolderMan *FolderMan::instance()
+ {
+-    Q_ASSERT(_instance);
++    // Upstream the Application owns the one FolderMan via createInstance(); here the
++    // first caller makes it and it lives for the life of the process.
++    if (!_instance) {
++        _instance = new FolderMan;
++    }
+     return _instance;
+ }
+ 
+@@ -142,16 +114,12 @@ void FolderMan::unloadFolder(Folder *f)
+     Q_ASSERT(f);
+ 
+     _folders.removeAll(f);
+-    _socketApi->slotUnregisterPath(f);
+ 
+ 
+     if (!f->hasSetupError()) {
+-        disconnect(f, nullptr, _socketApi.get(), nullptr);
+         disconnect(f, nullptr, this, nullptr);
+         disconnect(f, nullptr, &f->syncEngine().syncFileStatusTracker(), nullptr);
+         disconnect(&f->syncEngine(), nullptr, f, nullptr);
+-        disconnect(
+-            &f->syncEngine().syncFileStatusTracker(), &SyncFileStatusTracker::fileStatusChanged, _socketApi.get(), &SocketApi::broadcastStatusPushMessage);
+     }
+ }
+ 
+@@ -169,17 +137,6 @@ void FolderMan::unloadAndDeleteAllFolders()
+     }
+ }
+ 
+-void FolderMan::registerFolderWithSocketApi(Folder *folder)
+-{
+-    if (!folder)
+-        return;
+-    if (!QDir(folder->path()).exists())
+-        return;
+-
+-    // register the folder with the socket API
+-    if (folder->canSync())
+-        _socketApi->slotRegisterPath(folder);
+-}
+ 
+ std::optional<qsizetype> FolderMan::loadFolders()
+ {
+@@ -201,11 +158,7 @@ std::optional<qsizetype> FolderMan::loadFolders()
+             // TODO: Must do better error handling
+             qFatal("Could not load plugin");
          }
-@@ -237,15 +236,7 @@ bool FolderMan::ensureJournalGone(const QString &journalDbFile)
+-        auto account = AccountManager::instance()->account(folderDefinition.accountUUID());
+-        if (account.isNull()) {
+-            qFatal("Could not load account");
+-        }
+-        addFolderInternal(std::move(folderDefinition), account, std::move(vfs));
++        qFatal("Loading folders from settings needs the account manager, which is not built here");
+     }
+     settings.endArray();
+ 
+@@ -235,34 +188,20 @@ void FolderMan::saveFolders()
+ bool FolderMan::ensureJournalGone(const QString &journalDbFile)
+ {
      // remove the old journal file
-     while (QFile::exists(journalDbFile) && !QFile::remove(journalDbFile)) {
+-    while (QFile::exists(journalDbFile) && !QFile::remove(journalDbFile)) {
++    if (QFile::exists(journalDbFile) && !QFile::remove(journalDbFile)) {
          qCWarning(lcFolderMan) << u"Could not remove old db file at" << journalDbFile;
 -        int ret = QMessageBox::warning(nullptr, tr("Could not reset folder state"),
 -            tr("An old sync journal %1 was found, "
@@ -61,7 +148,46 @@ index 9b03bab..0362903 100644
      }
      return true;
  }
-@@ -531,7 +522,7 @@ static QString checkPathForSyncRootMarkingRecursive(const QString &path, FolderM
+ 
+-SocketApi *FolderMan::socketApi()
+-{
+-    return _socketApi.get();
+-}
+ 
+ void FolderMan::slotFolderCanSyncChanged()
+ {
+     Folder *f = qobject_cast<Folder *>(sender());
+     OC_ASSERT(f);
+     if (f->canSync()) {
+-        _socketApi->slotRegisterPath(f);
+     } else {
+-        _socketApi->slotUnregisterPath(f);
+     }
+ }
+ 
+@@ -277,7 +216,6 @@ void FolderMan::scheduleAllFolders()
+ 
+ void FolderMan::slotSyncOnceFileUnlocks(const QString &path, FileSystem::LockMode mode)
+ {
+-    _lockWatcher->addFile(path, mode);
+ }
+ 
+ void FolderMan::slotIsConnectedChanged()
+@@ -402,13 +340,9 @@ Folder *FolderMan::addFolderInternal(
+ 
+     // See matching disconnects in unloadFolder().
+     if (!folder->hasSetupError()) {
+-        connect(folder, &Folder::syncStateChange, _socketApi.get(), [folder, this] { _socketApi->slotUpdateFolderView(folder); });
+         connect(folder, &Folder::syncStateChange, this, [folder, this] { Q_EMIT folderSyncStateChange(folder); });
+         connect(folder, &Folder::canSyncChanged, this, &FolderMan::slotFolderCanSyncChanged);
+-        connect(
+-            &folder->syncEngine().syncFileStatusTracker(), &SyncFileStatusTracker::fileStatusChanged, _socketApi.get(), &SocketApi::broadcastStatusPushMessage);
+         connect(folder, &Folder::watchedFileChangedExternally, &folder->syncEngine().syncFileStatusTracker(), &SyncFileStatusTracker::slotPathTouched);
+-        registerFolderWithSocketApi(folder);
+     }
+     return folder;
+ }
+@@ -531,7 +465,7 @@ static QString checkPathForSyncRootMarkingRecursive(const QString &path, FolderM
  {
      std::pair<QString, QUuid> existingTags = Utility::getDirectorySyncRootMarkings(path);
      if (!existingTags.first.isEmpty()) {
@@ -70,7 +196,20 @@ index 9b03bab..0362903 100644
              // another application uses this as spaces root folder
              return FolderMan::tr("The folder »%1« is already in use by application %2!").arg(path, existingTags.first);
          }
-@@ -751,7 +742,7 @@ Folder *FolderMan::addFolderFromFolderWizardResult(const AccountStatePtr &accoun
+@@ -700,12 +634,6 @@ void FolderMan::setIgnoreHiddenFiles(bool ignore)
+     saveFolders();
+ }
+ 
+-bool FolderMan::isSpaceSynced(GraphApi::Space *space) const
+-{
+-    auto it = std::find_if(_folders.cbegin(), _folders.cend(), [space](auto f) { return f->space() == space; });
+-    return it != _folders.cend();
+-}
+-
+ void FolderMan::slotReloadSyncOptions()
+ {
+     for (auto *f : std::as_const(_folders)) {
+@@ -751,7 +679,7 @@ Folder *FolderMan::addFolderFromFolderWizardResult(const AccountStatePtr &accoun
  
  QString FolderMan::suggestSyncFolder(NewFolderType folderType, const QUuid &accountUuid)
  {

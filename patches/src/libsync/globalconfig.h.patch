@@ -1,0 +1,20 @@
+diff --git a/src/libsync/globalconfig.h b/src/libsync/globalconfig.h
+index 2ef8a44..25b9ece 100644
+--- a/src/libsync/globalconfig.h
++++ b/src/libsync/globalconfig.h
+@@ -6,15 +6,12 @@
+ #include "libsync/opencloudsynclib.h"
+ 
+ #include <QVariant>
+-#include <QtQmlIntegration/QtQmlIntegration>
+ 
+ namespace OCC {
+ class OPENCLOUD_SYNC_EXPORT GlobalConfig : public QObject
+ {
+     Q_OBJECT
+     Q_PROPERTY(QUrl serverUrl READ serverUrl CONSTANT)
+-    QML_ELEMENT
+-    QML_SINGLETON
+ public:
+     using QObject::QObject;
+ 

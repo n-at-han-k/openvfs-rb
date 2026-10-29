@@ -1,8 +1,15 @@
 diff --git a/src/libsync/configfile.cpp b/src/libsync/configfile.cpp
-index 2359d8d..1dc0be9 100644
+index 2359d8d..db5c9bb 100644
 --- a/src/libsync/configfile.cpp
 +++ b/src/libsync/configfile.cpp
-@@ -18,8 +18,6 @@
+@@ -13,13 +13,13 @@
+  */
+ 
+ #include "configfile.h"
++
++#include <QCoreApplication>
+ #include "common/asserts.h"
+ #include "common/utility.h"
  #include "common/version.h"
  #include "libsync/globalconfig.h"
  #include "logger.h"
@@ -11,7 +18,7 @@ index 2359d8d..1dc0be9 100644
  
  #include "creds/abstractcredentials.h"
  
-@@ -28,7 +26,6 @@
+@@ -28,7 +28,6 @@
  #include <QDir>
  #include <QFile>
  #include <QFileInfo>
@@ -19,7 +26,7 @@ index 2359d8d..1dc0be9 100644
  #include <QLoggingCategory>
  #include <QOperatingSystemVersion>
  #include <QSettings>
-@@ -159,44 +156,6 @@ std::chrono::seconds ConfigFile::timeout() const
+@@ -159,44 +158,6 @@ std::chrono::seconds ConfigFile::timeout() const
      return val ? std::chrono::seconds(val) : 5min;
  }
  
@@ -64,7 +71,18 @@ index 2359d8d..1dc0be9 100644
  
  QString ConfigFile::configPath()
  {
-@@ -250,7 +209,7 @@ QString ConfigFile::backup() const
+@@ -225,7 +186,9 @@ QString ConfigFile::excludeFile(Scope scope) const
+ 
+ QString ConfigFile::defaultExcludeFile()
+ {
+-    return QStringLiteral(":/client/OpenCloud/theme/universal/%1").arg(excludeFileNameC());
++    // Upstream reads this from the resources library's Qt resources, which are not
++    // built here; the build installs the file and names its path instead.
++    return QStringLiteral(OPENCLOUD_SYNC_EXCLUDE_FILE);
+ }
+ 
+ QString ConfigFile::backup() const
+@@ -250,7 +213,7 @@ QString ConfigFile::backup() const
  
  QString ConfigFile::configFile()
  {
@@ -73,7 +91,7 @@ index 2359d8d..1dc0be9 100644
  }
  
  QSettings ConfigFile::makeQSettings()
-@@ -421,11 +380,7 @@ void ConfigFile::setPauseSyncWhenMetered(bool isChecked)
+@@ -421,10 +384,6 @@ void ConfigFile::setPauseSyncWhenMetered(bool isChecked)
  
  bool ConfigFile::moveToTrash() const
  {
@@ -81,8 +99,6 @@ index 2359d8d..1dc0be9 100644
 -        return getValue(moveToTrashC(), false).toBool();
 -    }
 -
--    return false;
-+    return getValue(moveToTrashC(), false).toBool();
+     return false;
  }
  
- void ConfigFile::setMoveToTrash(bool isChecked)

@@ -92,11 +92,10 @@ outside this API.
 
 ### Building the desktop subset
 
-The existing locked `desktop` flake input supplies an explicit allowlist of files
-in `nix/desktop-upload.nix`. The derivation copies those files, applies
-`nix/desktop-upload.patch`, and builds a small static library with Qt's generated
-meta-object code. The patch isolates the PUT job and omits the account's desktop
-UI, space discovery, keychain, and disk-cache initialization for this build.
+The locked `desktop` flake input is built into a small static library with Qt's
+generated meta-object code, using the patches under `patches/`. The patches isolate
+the PUT job and omit the account's desktop UI, space discovery, keychain, and
+disk-cache initialization for this build.
 
 ```sh
 nix develop --command ruby -C ext/openvfs extconf.rb

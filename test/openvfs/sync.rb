@@ -12,7 +12,7 @@ require "uri"
 # folder reaches the server.
 #
 # This is what the bindings exist for, so it is also the specification of what
-# nix/desktop-upload.nix has to build: whatever this needs is in scope, whatever it does
+# flake.nix has to build: whatever this needs is in scope, whatever it does
 # not need gets patched out.
 describe OpenVFS::OCC do
   SERVER = ENV.fetch("OPENCLOUD_URL", "http://127.0.0.1:18280")
