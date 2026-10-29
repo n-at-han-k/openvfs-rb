@@ -1,3 +1,6 @@
 [submodule "opencloud-desktop"]
 	path = opencloud-desktop
 	url = https://github.com/opencloud-eu/desktop.git
+[submodule "rice"]
+	path = rice
+	url = https://github.com/ruby-rice/rice.git
