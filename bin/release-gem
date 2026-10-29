@@ -26,10 +26,11 @@
 #      The Cross Compile workflow uploads the objects themselves rather than gems — one
 #      artifact per platform, holding openvfs.<dlext> and occ/occ.<dlext> — so this script
 #      downloads them and does the packaging. A platform gem is the ordinary gemspec with
-#      three changes: the platform is set, the extensions are cleared so that RubyGems
-#      unpacks instead of compiling, and the Ruby requirement is narrowed to the ABI the
+#      four changes: the platform is set, the extensions are cleared so that RubyGems
+#      unpacks instead of compiling, the Ruby requirement is narrowed to the ABI the
 #      objects were compiled against, because a compiled object only loads on the Ruby it
-#      was built for.
+#      was built for, and a RubyGems floor is set because rubygems.org serves precompiled
+#      gems content-addressably and older clients cannot resolve those URLs.
 #
 #      The objects are not stamped with a version, so the run they come from has to be the
 #      one which built this commit: the gate is the run's head SHA against HEAD, not a
@@ -240,6 +241,8 @@ artifacts.each do |artifact|
   # The objects are already inside, so there is nothing to compile; leaving the extensions set is what would make RubyGems try.
   spec.extensions = []
   spec.required_ruby_version = "~> #{COMPILED_RUBY_ABI}.0"
+  # rubygems.org serves precompiled gems content-addressably, and refuses the push without this floor.
+  spec.required_rubygems_version = ">= 4.1.0.a"
   spec.files = carried + staged
 
   built = Dir.chdir(staging){Gem::Package.build(spec)}
