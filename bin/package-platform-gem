@@ -1,0 +1,126 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Released under the MIT License.
+# Copyright, 2026, by Nathan Kidd.
+
+# PACKAGE-PLATFORM-GEM(1)            General Commands Manual          PACKAGE-PLATFORM-GEM(1)
+#
+# NAME
+#      bin/package-platform-gem — build one precompiled platform gem from the objects in ext/
+#
+# SYNOPSIS
+#      bin/package-platform-gem PLATFORM
+#
+# DESCRIPTION
+#      Builds pkg/openvfs-rb-X.Y.Z-PLATFORM.gem from whatever has already been compiled into
+#      ext/, where PLATFORM is a RubyGems platform such as x86_64-linux or arm64-darwin.
+#
+#      This runs in CI, once per matrix job, right after that job has built its objects. The
+#      Cross Compile workflow uploads the gem it produces, so what the release downloads is
+#      already a gem. That is how vodozemac-rb works - its oxidize-rb/actions/cross-gem step
+#      builds the platform gem in the job - and it is why bin/release-gem does nothing but
+#      push: a gem's filename carries its version, so there is no question of which release
+#      a downloaded artifact belongs to.
+#
+#      A platform gem is the ordinary gemspec with three changes: the platform is set, the
+#      extensions are cleared so that RubyGems unpacks instead of compiling, and the Ruby
+#      requirement is narrowed to the ABI the objects were compiled against, because a
+#      compiled object only loads on the Ruby it was built for.
+#
+#      Nothing sets required_rubygems_version. A platform gem needs no floor to be resolved
+#      by a current RubyGems, and the floor this script used to set - ">= 4.1.0.a" - asked
+#      for a prerelease RubyGems that almost nothing has, which made the platform gems
+#      unselectable: bundler skipped them and resolved the source gem instead.
+#
+# EXIT STATUS
+#      The bin/package-platform-gem utility exits 0 on success, and >0 if an error occurs.
+#
+# SEE ALSO
+#      bin/release-gem(1), gem(1), .github/workflows/cross-compile.yml
+#
+# openvfs-rb                            October 29, 2026         PACKAGE-PLATFORM-GEM(1)
+
+require_relative "../lib/openvfs/rb/version"
+require "fileutils"
+require "rubygems/package"
+
+$stdout.sync = true
+
+root = File.expand_path("..", __dir__)
+Dir.chdir(root)
+
+# The matrix builds one Ruby, and an object is tied to the ABI it was compiled against, so this has to match `ruby:` in the workflow.
+COMPILED_RUBY_ABI = "3.4"
+
+gem_platform = ARGV.first
+
+if gem_platform.nil? || gem_platform.start_with?("-")
+  abort "usage: bin/package-platform-gem PLATFORM"
+end
+
+gemspec = "openvfs-rb.gemspec"
+pkg_dir = "pkg"
+source_spec = Gem::Specification.load(gemspec)
+
+if source_spec.nil?
+  abort "ERROR: could not load #{gemspec}"
+end
+
+# Whatever this job built: the Windows gem has occ alone, because upstream ships no Windows build of libopenvfs.
+openvfs_object = Dir["ext/openvfs/openvfs.{so,bundle}"].first
+occ_object = Dir["ext/openvfs/occ/occ.{so,bundle}"].first
+
+if occ_object.nil?
+  abort "ERROR: no compiled occ object in ext/openvfs/occ; build it before packaging."
+end
+
+dlext = File.extname(occ_object).delete_prefix(".")
+
+FileUtils.mkdir_p(pkg_dir)
+
+staging = File.join(pkg_dir, "stage-#{gem_platform}")
+
+FileUtils.rm_rf(staging)
+FileUtils.mkdir_p(staging)
+
+# Everything the source gem ships except the extension sources, which a precompiled gem has no use for. The gemspec globs with FNM_DOTMATCH, so its list holds directory entries too.
+carried = source_spec.files.reject{|path| path.start_with?("ext/")}.select{|path| File.file?(path)}
+
+carried.each do |path|
+  destination = File.join(staging, path)
+
+  FileUtils.mkdir_p(File.dirname(destination))
+  FileUtils.cp(path, destination)
+end
+
+# Into lib/, under the names the requires already ask for: lib/openvfs.rb does `require "openvfs/openvfs"` and lib/openvfs/occ.rb does `require "openvfs/occ/occ"`.
+staged = []
+
+unless openvfs_object.nil?
+  destination = File.join(staging, "lib/openvfs/openvfs.#{dlext}")
+
+  FileUtils.mkdir_p(File.dirname(destination))
+  FileUtils.cp(openvfs_object, destination)
+  staged << "lib/openvfs/openvfs.#{dlext}"
+end
+
+destination = File.join(staging, "lib/openvfs/occ/occ.#{dlext}")
+
+FileUtils.mkdir_p(File.dirname(destination))
+FileUtils.cp(occ_object, destination)
+staged << "lib/openvfs/occ/occ.#{dlext}"
+
+spec = source_spec.dup
+spec.platform = Gem::Platform.new(gem_platform)
+spec.extensions = []
+spec.required_ruby_version = "~> #{COMPILED_RUBY_ABI}.0"
+spec.files = carried + staged
+
+built = Dir.chdir(staging){Gem::Package.build(spec)}
+produced = File.join(pkg_dir, built)
+
+FileUtils.mv(File.join(staging, built), produced)
+FileUtils.rm_rf(staging)
+
+puts "#{produced}  (#{staged.join(', ')})"

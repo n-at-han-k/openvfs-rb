@@ -1,9 +1,12 @@
 name: Cross Compile
 
-# Cross-compiles the C++/Qt native extensions and uploads them as build
-# artifacts. Mirrors the structure of vodozemac-rb's cross-compile workflow,
-# adapted for a C++ native gem whose dependencies (Qt 6, the OpenVFS
-# library, the trimmed OpenCloud Desktop static library) are built via nix.
+# Cross-compiles the C++/Qt native extensions and packages each one into a
+# precompiled platform gem, uploaded as that job's artifact. Mirrors the structure
+# of vodozemac-rb's cross-compile workflow, whose oxidize-rb/actions/cross-gem step
+# likewise produces a gem per job; here bin/package-platform-gem does that, because
+# that action builds Rust extensions only. Adapted for a C++ native gem whose
+# dependencies (Qt 6, the OpenVFS library, the trimmed OpenCloud Desktop static
+# library) are built via nix.
 #
 # Linux and macOS build inside nix (the flake provides all native deps).
 #
@@ -70,15 +73,19 @@ jobs:
       matrix:
         include:
           - platform: x86_64-linux
+            gem_platform: x86_64-linux
             os: ubuntu-latest
             ruby: "3.4"
           - platform: aarch64-linux
+            gem_platform: aarch64-linux
             os: ubuntu-24.04-arm
             ruby: "3.4"
           - platform: x86_64-darwin
+            gem_platform: x86_64-darwin
             os: macos-15-intel
             ruby: "3.4"
           - platform: aarch64-darwin
+            gem_platform: arm64-darwin
             os: macos-15
             ruby: "3.4"
     steps:
@@ -103,16 +110,16 @@ jobs:
       - name: Run the suite
         run: nix develop --command bundle exec sus
 
-      # Each is copied on its own so one that was never built does not stop the rest
-      # being cached: on a failed run some of them exist and some do not.
+      # The gem is built here rather than at release time, the way vodozemac-rb's
+      # oxidize-rb/actions/cross-gem step does it: the artifact is then a gem whose
+      # filename carries its version, so releasing is download-and-push.
+      - name: Package the platform gem
+        run: nix develop --command bin/package-platform-gem ${{ matrix.gem_platform }}
+
       - uses: actions/upload-artifact@v4
         with:
           name: cross-gem-${{ matrix.platform }}
-          path: |
-            ext/openvfs/openvfs.so
-            ext/openvfs/occ/occ.so
-            ext/openvfs/openvfs.bundle
-            ext/openvfs/occ/occ.bundle
+          path: pkg/*.gem
           if-no-files-found: error
 
   cross-gem-windows:
@@ -123,6 +130,7 @@ jobs:
       matrix:
         include:
           - platform: x64-mingw-ucrt
+            gem_platform: x64-mingw-ucrt
             os: windows-2025
             ruby: "3.4"
     steps:
@@ -209,8 +217,12 @@ jobs:
           path: build/desktop-upload
           key: desktop-upload-${{ matrix.platform }}-${{ hashFiles('patches/**') }}-${{ github.sha }}
 
+      - name: Package the platform gem
+        shell: pwsh
+        run: ruby bin/package-platform-gem ${{ matrix.gem_platform }}
+
       - uses: actions/upload-artifact@v4
         with:
           name: cross-gem-${{ matrix.platform }}
-          path: ext/openvfs/occ/occ.so
+          path: pkg/*.gem
           if-no-files-found: error

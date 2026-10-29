@@ -205,7 +205,7 @@
       path = ./.;
       type = "path";
     };
-    version = "1.1.0";
+    version = "1.1.1";
   };
   parallel = {
     groups = ["default" "lint"];

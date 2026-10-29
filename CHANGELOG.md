@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-29
+
+### Fixed
+
+- The precompiled platform gems are published the way vodozemac-rb publishes its own, and are selectable again. 1.1.0's carried `required_rubygems_version = ">= 4.1.0.a"`, a prerelease floor almost no installation meets, so RubyGems and bundler skipped every platform gem and resolved the source gem instead - which compiles the extensions, and so wants Qt 6, the OpenVFS library and a C++ toolchain on a machine that should have needed none of them. No floor is set now: a platform gem needs none to be resolved.
+
+### Changed
+
+- The platform gems are built by the Cross Compile workflow, one per matrix job, by the new `bin/package-platform-gem`. This is what vodozemac-rb's `oxidize-rb/actions/cross-gem` step does for a Rust extension, and that action builds Rust only, hence the script. `bin/release-gem` downloads and pushes them and no longer opens or repacks an artifact.
+- `bin/release-gem` identifies a release's artifacts by gem filename rather than by the commit its workflow run was for. A gem's name carries its version, so the ancestry check and the workflow-paths staleness gate 1.1.0 needed are both gone.
+
 ## [1.1.0] - 2026-10-29
 
 ### Added
