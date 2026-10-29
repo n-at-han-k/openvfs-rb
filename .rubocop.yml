@@ -3,6 +3,10 @@ plugins:
 
 AllCops:
   DisabledByDefault: true
+  # Both submodules are upstream checkouts, not house code.
+  Exclude:
+    - "opencloud-desktop/**/*"
+    - "rice/**/*"
 
 # General Layout rules:
 

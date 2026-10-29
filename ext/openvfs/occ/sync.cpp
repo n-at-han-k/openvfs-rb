@@ -1,15 +1,18 @@
 // Rice bindings for OpenCloud Desktop.
 //
-// Only two classes are wrapped: OCC::Account and OCC::CredentialManager, plus the types
-// their methods take and return, and OCC::init - the desktop's own entry point, with the
-// UI patched out. Nothing here adds behaviour that libsync does not already have.
+// What is wrapped: OCC::Account and OCC::CredentialManager, OCC::ProgressDispatcher and the
+// Folder, SyncFileItem, ProgressInfo and Estimates its signals carry, plus the types all of
+// their methods take and return, and OCC::init - the desktop's own entry point, with the UI
+// patched out. Nothing here adds behaviour that libsync does not already have.
 //
 // is_convertible returns a double score, matching Rice 4.12.0's own converters in
 // stl.hpp; Rice's published docs still describe an older enum form.
 
 // Qt comes before Ruby, and the order is load-bearing on Windows: ruby.h defines truncate and access as macros onto its own win32 replacements, and Qt's headers stop with an #error rather than be parsed after that.
+#include <gui/folder.h>
 #include <libsync/account.h>
 #include <libsync/creds/credentialmanager.h>
+#include <libsync/progressdispatcher.h>
 
 #include <qt6keychain/keychain.h>
 
@@ -450,6 +453,58 @@ QVariant credential_get(OCC::CredentialManager &manager, const QString &key)
 
     return job->data();
 }
+
+// ProgressDispatcher's whole interface is four Qt signals, and the Ruby side of each one is
+// a block. Rice always turns a block into a proc and passes it as a trailing VALUE parameter
+// marked Arg(...).setValue(); Object(proc).call("call", ...) then invokes it with the
+// arguments converted by To_Ruby. Both halves are the documented
+// square_with_proc/invokeFunction pattern, only with a Qt connection in between.
+//
+// The proc has to outlive the subscribing call, so each lambda captures a Rice::Pin, whose
+// documented use is exactly "callback adapters that capture a Ruby proc". Pin's copy
+// semantics share one GC anchor, so every copy Qt takes of the lambda keeps the same proc
+// alive. Nothing disconnects: the dispatcher is a singleton and Rice does not free callback
+// wrappers either, for the same reason - C++ may call back at any time.
+
+void on_progress_info(OCC::ProgressDispatcher &self, VALUE callback)
+{
+    Rice::Pin pin(callback);
+    QObject::connect(&self, &OCC::ProgressDispatcher::progressInfo,
+        [pin](OCC::Folder *folder, const OCC::ProgressInfo &progress) {
+            Object(pin.value()).call("call", folder, progress);
+        });
+}
+
+void on_item_completed(OCC::ProgressDispatcher &self, VALUE callback)
+{
+    Rice::Pin pin(callback);
+    QObject::connect(&self, &OCC::ProgressDispatcher::itemCompleted,
+        [pin](OCC::Folder *folder, const OCC::SyncFileItemPtr &item) {
+            // By value, not by reference: a reference would wrap the signal's own
+            // QSharedPointer, which is gone once the emission returns. A copy is what Ruby
+            // frees, and copying a QSharedPointer is what holds the SyncFileItem open for as
+            // long as the block keeps it.
+            Object(pin.value()).call("call", folder, OCC::SyncFileItemPtr(item));
+        });
+}
+
+void on_sync_error(OCC::ProgressDispatcher &self, VALUE callback)
+{
+    Rice::Pin pin(callback);
+    QObject::connect(&self, &OCC::ProgressDispatcher::syncError,
+        [pin](OCC::Folder *folder, const QString &message, OCC::ErrorCategory category) {
+            Object(pin.value()).call("call", folder, message, category);
+        });
+}
+
+void on_folder_conflicts(OCC::ProgressDispatcher &self, VALUE callback)
+{
+    Rice::Pin pin(callback);
+    QObject::connect(&self, &OCC::ProgressDispatcher::folderConflicts,
+        [pin](OCC::Folder *folder, const QStringList &conflictPaths) {
+            Object(pin.value()).call("call", folder, conflictPaths);
+        });
+}
 }
 
 extern "C" void Init_occ()
@@ -498,5 +553,147 @@ extern "C" void Init_occ()
             .define_method("url=", [](OCC::AccountPtr &self, const QUrl &url) { self->setUrl(url); }, Arg("url"))
             .define_method("credential_manager", [](const OCC::AccountPtr &self) { return self->credentialManager(); },
                 Return().keepAlive());
+
+        // -----------------------------------------------------------------------------------------
+        // OCC::Folder - the sync folder a progress signal is about. Wrapped for its name and
+        // path only; the dispatcher hands out Folder pointers and Ruby needs to tell them apart.
+        //
+        // No define_constructor: folders are created by the desktop's FolderMan, never by Ruby,
+        // and a wrapped class without a constructor is simply one Ruby cannot instantiate.
+        // -----------------------------------------------------------------------------------------
+
+        Data_Type<OCC::Folder> rb_cFolder =
+            define_class_under<OCC::Folder>(rb_mOpenVFS, "Folder")
+            .define_method("display_name", &OCC::Folder::displayName)
+            .define_method("path", &OCC::Folder::path)
+            .define_method("clean_path", &OCC::Folder::cleanPath)
+            .define_method("short_gui_local_path", &OCC::Folder::shortGuiLocalPath)
+            .define_method("sync_running?", &OCC::Folder::isSyncRunning);
+
+        // -----------------------------------------------------------------------------------------
+        // OCC::SyncFileItem - one file in a sync run.
+        //
+        // As with Account, what gets wrapped is the QSharedPointer rather than what it points at,
+        // so the reference count keeps the item alive while Ruby holds it. The methods therefore
+        // take the pointer and dereference it.
+        // -----------------------------------------------------------------------------------------
+
+        Data_Type<OCC::SyncFileItemPtr> rb_cSyncFileItem =
+            define_class_under<OCC::SyncFileItemPtr>(rb_mOpenVFS, "SyncFileItem")
+            .define_method("local_name", [](const OCC::SyncFileItemPtr &self) { return self->localName(); })
+            .define_method("destination", [](const OCC::SyncFileItemPtr &self) { return self->destination(); })
+            .define_method("rename_target", [](const OCC::SyncFileItemPtr &self) { return self->_renameTarget; })
+            .define_method("original_file", [](const OCC::SyncFileItemPtr &self) { return self->_originalFile; })
+            .define_method("status", [](const OCC::SyncFileItemPtr &self) { return self->_status; })
+            .define_method("direction", [](const OCC::SyncFileItemPtr &self) { return self->_direction; })
+            .define_method("error_string", [](const OCC::SyncFileItemPtr &self) { return self->_errorString; })
+            .define_method("message_string", [](const OCC::SyncFileItemPtr &self) { return self->_messageString; })
+            .define_method("http_error_code", [](const OCC::SyncFileItemPtr &self) { return self->_httpErrorCode; })
+            .define_method("affected_items", [](const OCC::SyncFileItemPtr &self) { return self->_affectedItems; })
+            .define_method("size", [](const OCC::SyncFileItemPtr &self) { return self->_size; })
+            .define_method("modtime", [](const OCC::SyncFileItemPtr &self) { return self->_modtime; })
+            .define_method("etag", [](const OCC::SyncFileItemPtr &self) { return self->_etag; })
+            .define_method("empty?", [](const OCC::SyncFileItemPtr &self) { return self->isEmpty(); })
+            .define_method("directory?", [](const OCC::SyncFileItemPtr &self) { return self->isDirectory(); })
+            .define_method("error_status?", [](const OCC::SyncFileItemPtr &self) { return self->hasErrorStatus(); })
+            // OCC::Progress's two free functions turn an item into the line the desktop's own
+            // UI would show for it.
+            .define_method("action_string", [](const OCC::SyncFileItemPtr &self) { return OCC::Progress::asActionString(*self); })
+            .define_method("result_string", [](const OCC::SyncFileItemPtr &self) { return OCC::Progress::asResultString(*self); })
+            .define_method("warning_kind?", [](const OCC::SyncFileItemPtr &self) { return OCC::Progress::isWarningKind(self->_status); })
+            .define_method("ignored_kind?", [](const OCC::SyncFileItemPtr &self) { return OCC::Progress::isIgnoredKind(self->_status); });
+
+        Enum<OCC::SyncFileItem::Status> rb_eSyncFileItemStatus =
+            define_enum_under<OCC::SyncFileItem::Status>("Status", rb_cSyncFileItem)
+            .define_value("NoStatus", OCC::SyncFileItem::NoStatus)
+            .define_value("FatalError", OCC::SyncFileItem::FatalError)
+            .define_value("NormalError", OCC::SyncFileItem::NormalError)
+            .define_value("SoftError", OCC::SyncFileItem::SoftError)
+            .define_value("Success", OCC::SyncFileItem::Success)
+            .define_value("Conflict", OCC::SyncFileItem::Conflict)
+            .define_value("FileIgnored", OCC::SyncFileItem::FileIgnored)
+            .define_value("Restoration", OCC::SyncFileItem::Restoration)
+            .define_value("DetailError", OCC::SyncFileItem::DetailError)
+            .define_value("BlacklistedError", OCC::SyncFileItem::BlacklistedError)
+            .define_value("Excluded", OCC::SyncFileItem::Excluded)
+            .define_value("Message", OCC::SyncFileItem::Message)
+            .define_value("FilenameReserved", OCC::SyncFileItem::FilenameReserved);
+
+        Enum<OCC::SyncFileItem::Direction> rb_eSyncFileItemDirection =
+            define_enum_under<OCC::SyncFileItem::Direction>("Direction", rb_cSyncFileItem)
+            .define_value("None", OCC::SyncFileItem::None)
+            .define_value("Up", OCC::SyncFileItem::Up)
+            .define_value("Down", OCC::SyncFileItem::Down);
+
+        // -----------------------------------------------------------------------------------------
+        // OCC::ProgressInfo - the payload of the progressInfo signal.
+        // -----------------------------------------------------------------------------------------
+
+        // Estimates is a plain struct of two public members, which is what define_attr is for.
+        // Read-only: it is a snapshot the dispatcher computed, so writing to it means nothing.
+        Data_Type<OCC::ProgressInfo::Estimates> rb_cEstimates =
+            define_class_under<OCC::ProgressInfo::Estimates>(rb_mOpenVFS, "Estimates")
+            .define_attr("estimated_bandwidth", &OCC::ProgressInfo::Estimates::estimatedBandwidth, Rice::AttrAccess::Read)
+            .define_attr("estimated_eta", &OCC::ProgressInfo::Estimates::estimatedEta, Rice::AttrAccess::Read);
+
+        Data_Type<OCC::ProgressInfo> rb_cProgressInfo =
+            define_class_under<OCC::ProgressInfo>(rb_mOpenVFS, "ProgressInfo")
+            .define_method("status", &OCC::ProgressInfo::status)
+            .define_method("updating_estimates?", &OCC::ProgressInfo::isUpdatingEstimates)
+            .define_method("total_files", &OCC::ProgressInfo::totalFiles)
+            .define_method("completed_files", &OCC::ProgressInfo::completedFiles)
+            .define_method("total_size", &OCC::ProgressInfo::totalSize)
+            .define_method("completed_size", &OCC::ProgressInfo::completedSize)
+            .define_method("current_file", &OCC::ProgressInfo::currentFile)
+            // Estimates comes back by value, so Rice copy-constructs it and Ruby frees the copy.
+            .define_method("total_progress", &OCC::ProgressInfo::totalProgress)
+            .define_method("optimistic_eta", &OCC::ProgressInfo::optimisticEta)
+            .define_method("trust_eta?", &OCC::ProgressInfo::trustEta)
+            .define_method("file_progress", [](const OCC::ProgressInfo &self, const OCC::SyncFileItemPtr &item) {
+                return self.fileProgress(*item);
+            }, Arg("item"))
+            .define_method("current_discovered_remote_folder", [](const OCC::ProgressInfo &self) {
+                return self._currentDiscoveredRemoteFolder;
+            })
+            .define_method("current_discovered_local_folder", [](const OCC::ProgressInfo &self) {
+                return self._currentDiscoveredLocalFolder;
+            })
+            // _lastCompletedItem is a SyncFileItem value, and SyncFileItem is wrapped through
+            // its QSharedPointer, so hand back a copy in one rather than a reference into a
+            // ProgressInfo that only lives for the duration of the signal.
+            .define_method("last_completed_item", [](const OCC::ProgressInfo &self) {
+                return OCC::SyncFileItemPtr::create(self._lastCompletedItem);
+            });
+
+        Enum<OCC::ProgressInfo::Status> rb_eProgressInfoStatus =
+            define_enum_under<OCC::ProgressInfo::Status>("Status", rb_cProgressInfo)
+            .define_value("None", OCC::ProgressInfo::None)
+            .define_value("Discovery", OCC::ProgressInfo::Discovery)
+            .define_value("Reconcile", OCC::ProgressInfo::Reconcile)
+            .define_value("Propagation", OCC::ProgressInfo::Propagation)
+            .define_value("Done", OCC::ProgressInfo::Done);
+
+        Enum<OCC::ErrorCategory> rb_eErrorCategory =
+            define_enum_under<OCC::ErrorCategory>("ErrorCategory", rb_mOpenVFS)
+            .define_value("Normal", OCC::ErrorCategory::Normal)
+            .define_value("InsufficientRemoteStorage", OCC::ErrorCategory::InsufficientRemoteStorage);
+
+        // -----------------------------------------------------------------------------------------
+        // OCC::ProgressDispatcher - the singleton every sync progress signal comes through.
+        //
+        // instance() is a static member function, so define_singleton_function. It returns a
+        // pointer and Rice's default is that C++ keeps ownership, which is what a singleton
+        // wants - no Return().takeOwnership() here, or Ruby would free the one instance.
+        //
+        // Each on_* method subscribes a block; see the helpers above for how.
+        // -----------------------------------------------------------------------------------------
+
+        Data_Type<OCC::ProgressDispatcher> rb_cProgressDispatcher =
+            define_class_under<OCC::ProgressDispatcher>(rb_mOpenVFS, "ProgressDispatcher")
+            .define_singleton_function("instance", &OCC::ProgressDispatcher::instance)
+            .define_method("on_progress_info", &on_progress_info, Arg("callback").setValue())
+            .define_method("on_item_completed", &on_item_completed, Arg("callback").setValue())
+            .define_method("on_sync_error", &on_sync_error, Arg("callback").setValue())
+            .define_method("on_folder_conflicts", &on_folder_conflicts, Arg("callback").setValue());
     });
 }
