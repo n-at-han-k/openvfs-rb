@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    openvfs-rb (1.0.0)
+    openvfs-rb (1.1.0)
       gem_kit (~> 0.2)
       rice (~> 4.0)
 
