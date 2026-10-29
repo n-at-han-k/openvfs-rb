@@ -9,3 +9,5 @@
 /ext/**/*.bundle
 /ext/**/mkmf.log
 result
+*.gem
+*.gem*
