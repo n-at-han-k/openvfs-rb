@@ -7,9 +7,8 @@
 // is_convertible returns a double score, matching Rice 4.12.0's own converters in
 // stl.hpp; Rice's published docs still describe an older enum form.
 
-// rice.hpp stores a std::exception_ptr without including <exception> for it.
-// libstdc++ happens to pull the complete type in anyway; libc++ only forward-declares
-// it, so on clang every use is an incomplete type unless this comes first.
+// rice.hpp uses std::exception_ptr, std::sort and std::count_if without including the headers that define them. libstdc++ happens to pull them in anyway; libc++ does not, so on clang exception_ptr is incomplete and the algorithms are missing unless these come first.
+#include <algorithm>
 #include <exception>
 
 #include <rice/rice.hpp>

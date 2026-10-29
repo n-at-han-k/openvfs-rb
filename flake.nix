@@ -2,7 +2,11 @@
   description = "openvfs-rb — Ruby gem";
 
   inputs = {
-    nixpkgs.url = "nixpkgs";
+    # 26.05 rather than unstable: 26.11 dropped x86_64-darwin, and evaluating it for
+    # that system throws outright. This is the last branch that still builds every
+    # platform the gem ships, so all of them use it and there is one tree to reason
+    # about. It is security-fix-only from the end of 2026.
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-26.05-darwin";
     utils.url = "github:numtide/flake-utils";
     mine.url = "github:n-at-han-k/flake.nix";
     mine.inputs.nixpkgs.follows = "nixpkgs";
