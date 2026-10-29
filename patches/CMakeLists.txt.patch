@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index cb68fdf..e7828b1 100644
+index cb68fdf..590fe4f 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -3,6 +3,10 @@ cmake_minimum_required(VERSION 3.18)
@@ -37,7 +37,7 @@ index cb68fdf..e7828b1 100644
  # build the auto updater component
  ## -DWITH_AUTO_UPDATER=ON
  option(WITH_AUTO_UPDATER "WITH_AUTO_UPDATER" OFF)
-@@ -149,14 +146,6 @@ find_package(ZLIB REQUIRED)
+@@ -149,18 +146,6 @@ find_package(ZLIB REQUIRED)
  find_package(SQLite3 3.9.0 REQUIRED)
  
  add_subdirectory(src)
@@ -49,10 +49,14 @@ index cb68fdf..e7828b1 100644
 -    add_subdirectory(shell_integration)
 -endif()
 -
- if(BUILD_TESTING)
-     add_subdirectory(test)
- endif()
-@@ -169,14 +158,4 @@ else()
+-if(BUILD_TESTING)
+-    add_subdirectory(test)
+-endif()
+-
+ if(ECM_VERSION VERSION_GREATER_EQUAL 5.79)
+     message(STATUS "Suitable ECM ${ECM_VERSION} found, installing clang-format git hook")
+     include(KDEGitCommitHooks)
+@@ -169,14 +154,4 @@ else()
      message(WARNING "ECM ${ECM_VERSION} too old, cannot install clang-format git hook")
  endif()
  

@@ -37,18 +37,18 @@ describe OpenVFS do
     uri = URI.parse("#{dav_root}/#{name}")
     request = Net::HTTP::Get.new(uri.request_uri)
     request["Authorization"] = basic_auth
-    Net::HTTP.start(uri.host, uri.port) { |http| http.request(request) }
+    Net::HTTP.start(uri.host, uri.port) {|http| http.request(request)}
   end
 
   it "uploads a file that appears in a configured folder" do
-    skip "no OpenCloud server at #{SERVER}; run docker compose up -d" unless server_up?
+    unless server_up?
+      skip "no OpenCloud server at #{SERVER}; run docker compose up -d"
+    end
 
     Dir.mktmpdir("openvfs-sync") do |local|
       uuid = OpenVFS.configure(local, url: SERVER, remote_path: dav_root)
 
-      # Credentials live in the keychain, keyed by the account. Store them in a separate
-      # process so Qt (used by the keychain) is never initialised in this process before
-      # we fork the sync client — Qt is not fork-safe.
+      # Credentials live in the keychain, keyed by the account. Store them in a separate process so Qt (used by the keychain) is never initialised in this process before we fork the sync client — Qt is not fork-safe.
       setup = fork do
         account = OpenVFS::Account.create(uuid)
         account.url = SERVER
@@ -61,7 +61,9 @@ describe OpenVFS do
         exit 0
       end
       Process.wait(setup)
-      raise "credential setup failed (exit #{$?.exitstatus})" unless $?.success?
+      unless $?.success?
+        raise "credential setup failed (exit #{$?.exitstatus})"
+      end
 
       # start runs the client's own event loop, so it has to be its own process.
       # Capture its output to a temp file so a hang or crash leaves evidence.
@@ -97,7 +99,9 @@ describe OpenVFS do
           rescue Errno::ECHILD
             raise "sync client exited early (pid #{client})"
           end
-          sleep 1 unless uploaded
+          unless uploaded
+            sleep 1
+          end
         end
 
         unless uploaded
@@ -119,7 +123,7 @@ describe OpenVFS do
         rescue Errno::ESRCH
         end
         begin
-          Timeout.timeout(5) { Process.wait(client) }
+          Timeout.timeout(5) {Process.wait(client)}
         rescue StandardError
           Process.kill("KILL", client) rescue nil
           Process.wait(client) rescue nil

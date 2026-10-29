@@ -13,9 +13,7 @@ end
 
 $CXXFLAGS << " -std=c++23 -fPIC -Wno-array-bounds"
 
-# The static library is built with -ffunction-sections, so the link can drop every
-# function the extension never calls. ld64 spells that -dead_strip and has no
-# equivalent of --exclude-libs.
+# The static library is built with -ffunction-sections, so the link can drop every function the extension never calls. ld64 spells that -dead_strip and has no equivalent of --exclude-libs.
 if RbConfig::CONFIG["host_os"].match?(/darwin/)
   $LDFLAGS << " -Wl,-dead_strip"
 else
