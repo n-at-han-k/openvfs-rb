@@ -1,8 +1,8 @@
 diff --git a/src/libsync/CMakeLists.txt b/src/libsync/CMakeLists.txt
-index 3156120..c466ad4 100644
+index 3156120..3d5b539 100644
 --- a/src/libsync/CMakeLists.txt
 +++ b/src/libsync/CMakeLists.txt
-@@ -1,186 +1,184 @@
+@@ -1,186 +1,214 @@
 -find_package(LibreGraphAPI 1.0.8 REQUIRED)
 -set_package_properties(LibreGraphAPI PROPERTIES
 -        URL https://github.com/opencloud-eu/libre-graph-api-cpp-qt-client
@@ -46,16 +46,18 @@ index 3156120..c466ad4 100644
 -    syncresult.cpp
 -    syncoptions.cpp
 -    theme.cpp
--
++# The gem only needs the account, discovery and PUT upload subset of the desktop.
++# Upstream builds resources/libsync/gui/cmd/plugins as separate targets; this file
++# replaces that with one static library so the UI never has to be linked or built.
+ 
 -    creds/abstractcredentials.cpp
 -    creds/credentialmanager.cpp
 -    creds/httpcredentials.cpp
 -    creds/oauth.cpp
 -    creds/jwt.cpp
 -    creds/idtoken.cpp
-+# The gem only needs the account, discovery and PUT upload subset of the desktop.
-+# Upstream builds resources/libsync/gui/cmd/plugins as separate targets; this file
-+# replaces that with one static library so the UI never has to be linked or built.
++include(GNUInstallDirs)
++include(GenerateExportHeader)
  
 -    networkjobs/getfilejob.cpp
 -    networkjobs/checkserverjobfactory.cpp
@@ -63,18 +65,16 @@ index 3156120..c466ad4 100644
 -    networkjobs/jsonjob.cpp
 -    networkjobs/simplenetworkjob.cpp
 -    networkjobs/resources.cpp
-+include(GNUInstallDirs)
-+include(GenerateExportHeader)
- 
--    abstractcorejob.cpp
 +find_package(SQLite3 REQUIRED)
 +find_package(Qt6Keychain REQUIRED)
  
--    appprovider.cpp
+-    abstractcorejob.cpp
 +set(CMAKE_CXX_STANDARD 23)
 +set(CMAKE_CXX_STANDARD_REQUIRED ON)
 +set(CMAKE_AUTOMOC ON)
  
+-    appprovider.cpp
+-
 -    path.cpp
 +file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
 +configure_file(
@@ -85,25 +85,6 @@ index 3156120..c466ad4 100644
  
 -
 -set_source_files_properties(accessmanager.cpp PROPERTIES COMPILE_DEFINITIONS WITH_HTTP2=$<BOOL:${WITH_HTTP2}>)
--
--if(WIN32)
--    target_sources(libsync PRIVATE platform_win.cpp)
--elseif(UNIX)
--    target_sources(libsync PRIVATE xattr.cpp)
--    if (APPLE)
--        target_sources(libsync PRIVATE platform_mac.mm)
--    else()
--        target_sources(libsync PRIVATE platform_unix.cpp)
--    endif()
--endif()
--
--# These headers are installed for libopencloudsync to be used by 3rd party apps
--INSTALL(
--    FILES
--        ${CMAKE_CURRENT_BINARY_DIR}/opencloudsynclib.h
--        logger.h
--        accessmanager.h
--    DESTINATION ${KDE_INSTALL_INCLUDEDIR}/OpenCloud/libsync
 +add_library(opencloud-upload STATIC
 +    ${CMAKE_SOURCE_DIR}/src/libsync/abstractnetworkjob.cpp
 +    ${CMAKE_SOURCE_DIR}/src/libsync/accessmanager.cpp
@@ -124,7 +105,6 @@ index 3156120..c466ad4 100644
 +    ${CMAKE_SOURCE_DIR}/src/libsync/vfs/vfs.cpp
 +    ${CMAKE_SOURCE_DIR}/src/gui/folder.cpp
 +    ${CMAKE_SOURCE_DIR}/src/gui/folderwatcher.cpp
-+    ${CMAKE_SOURCE_DIR}/src/gui/folderwatcher_linux.cpp
 +    ${CMAKE_SOURCE_DIR}/src/libsync/creds/abstractcredentials.cpp
 +    ${CMAKE_SOURCE_DIR}/src/libsync/common/checksumalgorithms.cpp
 +    ${CMAKE_SOURCE_DIR}/src/libsync/common/chronoelapsedtimer.cpp
@@ -163,7 +143,6 @@ index 3156120..c466ad4 100644
 +    ${CMAKE_SOURCE_DIR}/src/gui/scheduling/syncscheduler.cpp
 +    ${CMAKE_SOURCE_DIR}/src/gui/scheduling/etagwatcher.cpp
 +    ${CMAKE_SOURCE_DIR}/src/libsync/globalconfig.cpp
-+    ${CMAKE_SOURCE_DIR}/src/libsync/xattr.cpp
 +    ${CMAKE_SOURCE_DIR}/src/libsync/logger.cpp
 +    ${CMAKE_SOURCE_DIR}/src/libsync/networkjobs/getfilejob.cpp
 +    ${CMAKE_SOURCE_DIR}/src/libsync/networkjobs/jsonjob.cpp
@@ -177,13 +156,53 @@ index 3156120..c466ad4 100644
 +    ${CMAKE_SOURCE_DIR}/src/gui/accountmanager.cpp
 +    ${CMAKE_SOURCE_DIR}/src/cmd/tokencredentials.cpp
 +    ${CMAKE_SOURCE_DIR}/src/libsync/platform.cpp
-+    ${CMAKE_SOURCE_DIR}/src/libsync/platform_unix.cpp
 +    ${CMAKE_SOURCE_DIR}/src/libsync/creds/httpcredentials.cpp
 +    ${CMAKE_SOURCE_DIR}/src/libsync/creds/credentialmanager.cpp
 +    ${CMAKE_SOURCE_DIR}/src/gui/main.cpp
 +    ${CMAKE_BINARY_DIR}/generated/version.cpp
- )
++)
  
+ if(WIN32)
+-    target_sources(libsync PRIVATE platform_win.cpp)
+-elseif(UNIX)
+-    target_sources(libsync PRIVATE xattr.cpp)
+-    if (APPLE)
+-        target_sources(libsync PRIVATE platform_mac.mm)
+-    else()
+-        target_sources(libsync PRIVATE platform_unix.cpp)
+-    endif()
++    target_sources(opencloud-upload PRIVATE
++        ${CMAKE_SOURCE_DIR}/src/gui/folderwatcher_win.cpp
++        ${CMAKE_SOURCE_DIR}/src/libsync/platform_win.cpp
++        ${CMAKE_SOURCE_DIR}/src/libsync/common/utility_win.cpp
++    )
++elseif(APPLE)
++    target_sources(opencloud-upload PRIVATE
++        ${CMAKE_SOURCE_DIR}/src/gui/folderwatcher_mac.cpp
++        ${CMAKE_SOURCE_DIR}/src/libsync/platform_mac.mm
++        ${CMAKE_SOURCE_DIR}/src/libsync/xattr.cpp
++    )
++else()
++    target_sources(opencloud-upload PRIVATE
++        ${CMAKE_SOURCE_DIR}/src/gui/folderwatcher_linux.cpp
++        ${CMAKE_SOURCE_DIR}/src/libsync/platform_unix.cpp
++        ${CMAKE_SOURCE_DIR}/src/libsync/xattr.cpp
++    )
+ endif()
+ 
+-# These headers are installed for libopencloudsync to be used by 3rd party apps
+-INSTALL(
+-    FILES
+-        ${CMAKE_CURRENT_BINARY_DIR}/opencloudsynclib.h
+-        logger.h
+-        accessmanager.h
+-    DESTINATION ${KDE_INSTALL_INCLUDEDIR}/OpenCloud/libsync
++set_target_properties(opencloud-upload PROPERTIES
++    POSITION_INDEPENDENT_CODE ON
++    CXX_VISIBILITY_PRESET hidden
++    VISIBILITY_INLINES_HIDDEN ON
+ )
+-
 -set_target_properties(libsync PROPERTIES EXPORT_NAME SyncCore)
 -
 -target_link_libraries(libsync
@@ -199,10 +218,10 @@ index 3156120..c466ad4 100644
 -        ZLIB::ZLIB
 -        Qt6Keychain::Qt6Keychain
 -        SQLite::SQLite3
-+set_target_properties(opencloud-upload PROPERTIES
-+    POSITION_INDEPENDENT_CODE ON
-+    CXX_VISIBILITY_PRESET hidden
-+    VISIBILITY_INLINES_HIDDEN ON
++target_compile_definitions(opencloud-upload PUBLIC
++    OPENCLOUD_BUILT_AS_STATIC
++    QT_NO_KEYWORDS
++    WITH_HTTP2=1
  )
 -
 -apply_common_target_settings(libsync)
@@ -211,17 +230,6 @@ index 3156120..c466ad4 100644
 -        VERSION 1.0
 -        NAMESPACE OCC
 -        GENERATE_PLUGIN_SOURCE
-+target_compile_definitions(opencloud-upload PUBLIC
-+    OPENCLOUD_BUILT_AS_STATIC
-+    QT_NO_KEYWORDS
-+    WITH_HTTP2=1
- )
--
--ecm_finalize_qml_module(libsync DESTINATION ${KDE_INSTALL_QMLDIR})
--
--set_source_files_properties(configfile.cpp
--    PROPERTIES
--        COMPILE_DEFINITIONS EXCLUDE_FILE_NAME="${EXCLUDE_FILE_NAME}"
 +target_compile_definitions(opencloud-upload PRIVATE
 +    QT_NO_CAST_TO_ASCII
 +    QT_NO_CAST_FROM_ASCII
@@ -232,6 +240,15 @@ index 3156120..c466ad4 100644
 +    QT_NO_FOREACH
 +    QT_DISABLE_DEPRECATED_BEFORE=0x060200
 +    QT_NO_CONTEXTLESS_CONNECT
+ )
+-
+-ecm_finalize_qml_module(libsync DESTINATION ${KDE_INSTALL_QMLDIR})
+-
+-set_source_files_properties(configfile.cpp
+-    PROPERTIES
+-        COMPILE_DEFINITIONS EXCLUDE_FILE_NAME="${EXCLUDE_FILE_NAME}"
++target_compile_definitions(opencloud-upload PUBLIC
++    OPENCLOUD_SYNC_EXCLUDE_FILE="${CMAKE_INSTALL_FULL_DATADIR}/opencloud-upload/sync-exclude.lst"
  )
 -
 -target_link_libraries(libsync PUBLIC $<BUILD_INTERFACE:OpenAPI::LibreGraphAPI>)
@@ -250,7 +267,11 @@ index 3156120..c466ad4 100644
 -if(Inotify_FOUND)
 -    target_include_directories(libsync PRIVATE ${Inotify_INCLUDE_DIRS})
 -    target_link_libraries(libsync PUBLIC ${Inotify_LIBRARIES})
--endif()
++if(MSVC)
++    target_compile_options(opencloud-upload PRIVATE /Gy /Gw)
++else()
++    target_compile_options(opencloud-upload PRIVATE -ffunction-sections -fdata-sections)
+ endif()
 -
 -if(NO_MSG_HANDLER)
 -    target_compile_definitions(libsync PRIVATE -DNO_MSG_HANDLER=1)
@@ -260,15 +281,6 @@ index 3156120..c466ad4 100644
 -        EXPORT_MACRO_NAME OPENCLOUD_SYNC_EXPORT
 -        EXPORT_FILE_NAME opencloudsynclib.h
 -        STATIC_DEFINE OPENCLOUD_BUILT_AS_STATIC
-+target_compile_definitions(opencloud-upload PUBLIC
-+    OPENCLOUD_SYNC_EXCLUDE_FILE="${CMAKE_INSTALL_FULL_DATADIR}/opencloud-upload/sync-exclude.lst"
- )
--
--set_target_properties(libsync PROPERTIES
--        OUTPUT_NAME "OpenCloudLibSync"
--        VERSION ${MIRALL_VERSION}
--        SOVERSION ${MIRALL_SOVERSION}
-+target_compile_options(opencloud-upload PRIVATE -ffunction-sections -fdata-sections)
 +target_include_directories(opencloud-upload PUBLIC
 +    ${CMAKE_SOURCE_DIR}/src
 +    ${CMAKE_SOURCE_DIR}/src/libsync
@@ -278,19 +290,10 @@ index 3156120..c466ad4 100644
 +    ${CMAKE_BINARY_DIR}/generated/libsync
  )
 -
--if(WITH_CRASHREPORTER)
--    set_source_files_properties(platform.cpp PROPERTIES COMPILE_DEFINITIONS CRASHREPORTER_EXECUTABLE="${CRASHREPORTER_EXECUTABLE}")
--    target_link_libraries(libsync PRIVATE CrashReporterQt::Handler)
--
--    if(UNIX AND NOT MAC)
--        find_package(Threads REQUIRED)
--        target_link_libraries(libsync PUBLIC Threads::Threads)
--    endif()
--endif()
--
--target_sources(libsync PRIVATE
--    csync.cpp
--    csync_exclude.cpp
+-set_target_properties(libsync PROPERTIES
+-        OUTPUT_NAME "OpenCloudLibSync"
+-        VERSION ${MIRALL_VERSION}
+-        SOVERSION ${MIRALL_SOVERSION}
 +target_link_libraries(opencloud-upload PUBLIC
 +    Qt6::Core
 +    Qt6::Concurrent
@@ -301,6 +304,33 @@ index 3156120..c466ad4 100644
 +    ZLIB::ZLIB
  )
  
+-if(WITH_CRASHREPORTER)
+-    set_source_files_properties(platform.cpp PROPERTIES COMPILE_DEFINITIONS CRASHREPORTER_EXECUTABLE="${CRASHREPORTER_EXECUTABLE}")
+-    target_link_libraries(libsync PRIVATE CrashReporterQt::Handler)
+-
+-    if(UNIX AND NOT MAC)
+-        find_package(Threads REQUIRED)
+-        target_link_libraries(libsync PUBLIC Threads::Threads)
+-    endif()
++if(APPLE)
++    target_link_libraries(opencloud-upload PUBLIC
++        "-framework AppKit"
++        "-framework CoreServices"
++        "-framework Foundation"
++        "-framework IOKit"
++    )
+ endif()
+ 
+-target_sources(libsync PRIVATE
+-    csync.cpp
+-    csync_exclude.cpp
++file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated/libsync")
++generate_export_header(opencloud-upload
++    EXPORT_MACRO_NAME OPENCLOUD_SYNC_EXPORT
++    EXPORT_FILE_NAME "${CMAKE_BINARY_DIR}/generated/libsync/opencloudsynclib.h"
++    STATIC_DEFINE OPENCLOUD_BUILT_AS_STATIC
+ )
+ 
 -
 -try_compile(HAS_CLOCK_CAST
 -        SOURCE_FROM_CONTENT chrono_test.cpp "
@@ -308,19 +338,6 @@ index 3156120..c466ad4 100644
 -int main() {
 -    std::chrono::clock_cast<std::chrono::system_clock>;
 -}"
-+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated/libsync")
-+generate_export_header(opencloud-upload
-+    EXPORT_MACRO_NAME OPENCLOUD_SYNC_EXPORT
-+    EXPORT_FILE_NAME "${CMAKE_BINARY_DIR}/generated/libsync/opencloudsynclib.h"
-+    STATIC_DEFINE OPENCLOUD_BUILT_AS_STATIC
- )
--message(STATUS "HAS_CLOCK_CAST: ${HAS_CLOCK_CAST}")
- 
--if(HAS_CLOCK_CAST)
--    set_source_files_properties(filesystem.cpp PROPERTIES COMPILE_DEFINITIONS HAS_CLOCK_CAST)
--endif()
--
--add_subdirectory(common)
 +# src/gui headers include "gui/opencloudguilib.h"; upstream generates it from the
 +# OpenCloudGui target, which this build does not have. Alias it onto our own macro.
 +file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated/gui")
@@ -337,8 +354,15 @@ index 3156120..c466ad4 100644
 +    "${CMAKE_SOURCE_DIR}/opencloud-upload.pc.in"
 +    "${CMAKE_BINARY_DIR}/opencloud-upload.pc"
 +    @ONLY
-+)
+ )
+-message(STATUS "HAS_CLOCK_CAST: ${HAS_CLOCK_CAST}")
  
+-if(HAS_CLOCK_CAST)
+-    set_source_files_properties(filesystem.cpp PROPERTIES COMPILE_DEFINITIONS HAS_CLOCK_CAST)
+-endif()
+-
+-add_subdirectory(common)
+-
 -install(TARGETS libsync EXPORT OpenCloudConfig ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
 +install(TARGETS opencloud-upload ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 +install(DIRECTORY

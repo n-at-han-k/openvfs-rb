@@ -1,0 +1,12 @@
+diff --git a/src/libsync/platform_mac.mm b/src/libsync/platform_mac.mm
+index 9925ea5..9660d33 100644
+--- a/src/libsync/platform_mac.mm
++++ b/src/libsync/platform_mac.mm
+@@ -15,7 +15,6 @@
+ 
+ #include "platform_mac.h"
+ 
+-#include <QApplication>
+ #include <QLoggingCategory>
+ 
+ #import <AppKit/NSApplication.h>

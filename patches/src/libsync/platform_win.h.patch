@@ -1,0 +1,14 @@
+diff --git a/src/libsync/platform_win.h b/src/libsync/platform_win.h
+index 3c37e1a..a40b23d 100644
+--- a/src/libsync/platform_win.h
++++ b/src/libsync/platform_win.h
+@@ -30,9 +30,6 @@ public:
+ private:
+     WinPlatform(Type type);
+ 
+-    /// Utility thread that takes care of proper Windows logout handling.
+-    void startShutdownWatcher();
+-
+     friend class Platform;
+ };
+ 
