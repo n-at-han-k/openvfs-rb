@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-30
+
+### Changed
+
+- `OpenVFS.configure` takes `user:`, and writes the config where that account's engine will read it. One call writes one file for one account, so several accounts are several calls from several processes rather than one file holding them all - the previous path was fixed, so a second call overwrote the first and only the last account synced.
+- `ApplicationScope` restores whatever application name is set rather than putting back `openvfs-rb`. The name decides which config the engine reads, so a credential write would otherwise repoint it at another account.
+
+### Added
+
+- `OpenVFS.application_name` and `OpenVFS.application_name=`. `ConfigFile::configPath` is `QStandardPaths::AppConfigLocation`, which is `$XDG_CONFIG_HOME/<application name>`, and `ConfigFile::configFile` is that plus the lowercased name and `.cfg` - so the name is what picks an account's config out, and `configure` sets it.
+- `OpenVFS.application_name_for(user, url)`, the `<user>@<host>` an account is named by.
+- `OpenVFS.config_path`, the file the current application name resolves to. Derived the way `ConfigFile` derives it, so the two agree; the old path ignored `XDG_CONFIG_HOME` where the engine honours it.
+
 ## [1.1.3] - 2026-10-30
 
 ### Added

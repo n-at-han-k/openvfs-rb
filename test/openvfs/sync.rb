@@ -46,7 +46,7 @@ describe OpenVFS do
     end
 
     Dir.mktmpdir("openvfs-sync") do |local|
-      uuid = OpenVFS.configure(local, url: SERVER, remote_path: dav_root)
+      uuid = OpenVFS.configure(local, url: SERVER, remote_path: dav_root, user: USER)
 
       # Credentials live in the keychain, keyed by the account. Store them in a separate process so Qt (used by the keychain) is never initialised in this process before we fork the sync client — Qt is not fork-safe.
       setup = fork do

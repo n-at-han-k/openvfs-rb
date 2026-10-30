@@ -375,6 +375,11 @@ class ApplicationScope
 public:
     ApplicationScope()
     {
+        // Whatever the name is, it is the account's: ConfigFile derives both the config
+        // directory and the file inside it from the application name, so losing it would
+        // point the engine at a different account's config.
+        _name = QCoreApplication::applicationName();
+
         if (QCoreApplication::instance()) {
             return;
         }
@@ -383,7 +388,7 @@ public:
         static char name[] = "openvfs-rb";
         static char *argv[] = {name, nullptr};
         _application = std::make_unique<QCoreApplication>(argc, argv);
-        _application->setApplicationName(QStringLiteral("openvfs-rb"));
+        _application->setApplicationName(_name);
     }
 
     ~ApplicationScope()
@@ -394,10 +399,11 @@ public:
 
         _application.reset();
         // QCoreApplication clears the application name when it is destroyed.
-        QCoreApplication::setApplicationName(QStringLiteral("openvfs-rb"));
+        QCoreApplication::setApplicationName(_name);
     }
 
 private:
+    QString _name;
     std::unique_ptr<QCoreApplication> _application;
 };
 
@@ -518,6 +524,22 @@ extern "C" void Init_occ()
         // The desktop's entry point: src/gui/main.cpp, reduced by the patches to its non-UI
         // bootstrap. It takes the arguments the command line already accepts.
         // -----------------------------------------------------------------------------------------
+
+        // ConfigFile::configPath is QStandardPaths::AppConfigLocation, which is
+        // $XDG_CONFIG_HOME/<application name>, and ConfigFile::configFile is that plus the
+        // lowercased name and ".cfg". So the name is what picks the config out, and one
+        // process per account means setting it per account.
+        rb_mOpenVFS.define_module_function("application_name", []() {
+            return QCoreApplication::applicationName();
+        });
+
+        rb_mOpenVFS.define_module_function(
+            "application_name=",
+            [](const QString &name) {
+                QCoreApplication::setApplicationName(name);
+                return name;
+            },
+            Arg("name"));
 
         rb_mOpenVFS.define_module_function(
             "start",
