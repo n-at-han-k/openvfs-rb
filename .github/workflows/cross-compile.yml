@@ -99,11 +99,19 @@ jobs:
       - name: Run the suite
         run: nix develop .#${{ matrix.ruby.shell }} --command bundle exec sus
 
+      # Named rather than globbed: macOS leaves an openvfs.bundle.dSYM directory of debug
+      # symbols beside each object, which `cp` refuses and the gem has no use for. Each is
+      # tested for because only one of .so and .bundle exists on any given runner.
       - name: Stage the objects
         run: |
           mkdir -p objects
-          cp ext/openvfs/openvfs.* objects/
-          cp ext/openvfs/occ/occ.* objects/
+          for object in ext/openvfs/openvfs.so ext/openvfs/openvfs.bundle \
+                        ext/openvfs/occ/occ.so ext/openvfs/occ/occ.bundle; do
+            if [ -f "$object" ]; then
+              cp "$object" objects/
+            fi
+          done
+          ls -l objects
 
       - uses: actions/upload-artifact@v4
         with:
@@ -215,6 +223,7 @@ jobs:
         run: |
           mkdir -p objects
           cp ext/openvfs/occ/occ.so objects/
+          ls -l objects
 
       - uses: actions/upload-artifact@v4
         with:
