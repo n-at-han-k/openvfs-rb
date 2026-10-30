@@ -7,22 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.1.4] - 2026-10-30
-
-### Changed
-
-- `OpenVFS.configure` takes a list of accounts rather than one folder, and writes them all. An account is a server and a user, so being signed in to one server twice, or to two servers as one user, is two accounts and two syncs. The file is written whole, so configuring them one at a time left only the last - the call is now `OpenVFS.configure([{ path:, url:, user:, remote_path: }, ...])` and it returns a uuid per account, in order.
-- An account's uuid is derived from its server and user rather than drawn at random, by `OpenVFS.account_uuid`. The keychain entry is keyed by the uuid, so a random one meant a new account on every start: the credential stored last time was orphaned and the journal began again.
-- `display-name` is written for each account, which is what `AccountManager::restore` reads the user from.
-
-### Added
-
-- `OpenVFS.config_path`, the INI the engine reads. `ConfigFile::makeQSettings` builds that path from the home directory, so it is not the caller's to choose - but it is worth being able to see.
-
-### Fixed
-
-- The suite no longer writes the real `~/.config/openvfs-rb/openvfs-rb.cfg`. It moves `HOME` into its temporary directory first, so a run no longer leaves the next reader of that file syncing a directory that has been deleted.
-
 ## [1.1.3] - 2026-10-30
 
 ### Added

@@ -5,6 +5,6 @@
 
 module OpenVFS
   module Rb
-    VERSION = "1.1.4"
+    VERSION = "1.1.3"
   end
 end

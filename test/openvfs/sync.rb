@@ -7,7 +7,6 @@ require "securerandom"
 require "tempfile"
 require "time"
 require "timeout"
-require "fileutils"
 require "tmpdir"
 require "uri"
 
@@ -47,11 +46,7 @@ describe OpenVFS do
     end
 
     Dir.mktmpdir("openvfs-sync") do |local|
-      # OpenVFS.configure writes under Dir.home, so without this the suite overwrites the real config and whatever reads it next tries to sync this temporary directory.
-      ENV["HOME"] = File.join(local, "home")
-      FileUtils.mkdir_p(ENV.fetch("HOME"))
-
-      uuid = OpenVFS.configure([{ path: local, url: SERVER, user: USER, remote_path: dav_root }]).first
+      uuid = OpenVFS.configure(local, url: SERVER, remote_path: dav_root)
 
       # Credentials live in the keychain, keyed by the account. Store them in a separate process so Qt (used by the keychain) is never initialised in this process before we fork the sync client — Qt is not fork-safe.
       setup = fork do
