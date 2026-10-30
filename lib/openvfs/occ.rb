@@ -15,13 +15,13 @@ require "securerandom"
 require "uri"
 
 module OpenVFS
-  # What the engine calls itself, and so where it reads its config: ConfigFile::configPath is QStandardPaths::AppConfigLocation, which is $XDG_CONFIG_HOME/<application name>, and ConfigFile::configFile is that plus the lowercased name and ".cfg".
+  # What the engine calls itself, which is also where it reads its config.
   # @parameter user [String] the user on the server.
   # @parameter url [String] the server's base URL, whose host names the account with the user.
   # @returns [String] the application name for that account.
   def self.application_name_for(user, url) = "#{user}@#{URI(url.to_s).host}"
 
-  # The INI the engine will read once the application name is that account's. Derived the same way ConfigFile does it, so the two agree.
+  # The INI that application name resolves to, derived the way ConfigFile derives it.
   # @parameter name [String] the application name; the current one by default.
   # @returns [String] the config file for that name.
   def self.config_path(name = application_name)
@@ -41,8 +41,7 @@ module OpenVFS
   # @parameter space_id [String] The space to sync, if any.
   # @returns [String] The UUID the account was written under.
   def self.configure(path, url:, remote_path:, user:, uuid: SecureRandom.uuid, display_name: path, space_id: "")
-    # One account per process, so the application name is the account's: it is what decides
-    # which config the engine reads, and OpenVFS.start reads it rather than being told.
+    # One account per process, so the application name is the account's: it is what decides which config the engine reads, and OpenVFS.start reads it rather than being told.
     self.application_name = application_name_for(user, url)
 
     config_path = self.config_path
