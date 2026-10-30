@@ -143,17 +143,19 @@ jobs:
         run: bin/apply-patches
 
       # The build tree, not the install prefix: ninja then recompiles only the files a
-      # patch actually changed instead of all 80 again. The runner's workspace path is
-      # stable, so the absolute paths in CMakeCache stay valid between runs. The library
-      # links no Ruby, so every ABI's job shares one cache entry.
+      # patch actually changed instead of all 80 again. CMakeCache.txt holds absolute
+      # paths to the toolchain, and MSYS2 lives under the Ruby it came with -
+      # .../Ruby/3.4.12/x64/msys64/ucrt64 - so the ABI is part of the key. Sharing one
+      # entry across the matrix hands a job a cache naming a Ruby it does not have, and
+      # cmake fails on the first tool it tries to run.
       - uses: actions/cache/restore@v4
         id: cache
         with:
           path: build/desktop-upload
-          key: desktop-upload-${{ matrix.target.platform }}-${{ hashFiles('patches/**') }}-${{ github.sha }}
+          key: desktop-upload-${{ matrix.target.platform }}-ruby${{ matrix.ruby.abi }}-${{ hashFiles('patches/**') }}-${{ github.sha }}
           restore-keys: |
-            desktop-upload-${{ matrix.target.platform }}-${{ hashFiles('patches/**') }}-
-            desktop-upload-${{ matrix.target.platform }}-
+            desktop-upload-${{ matrix.target.platform }}-ruby${{ matrix.ruby.abi }}-${{ hashFiles('patches/**') }}-
+            desktop-upload-${{ matrix.target.platform }}-ruby${{ matrix.ruby.abi }}-
 
       - name: Build the trimmed desktop static library
         shell: pwsh
@@ -206,7 +208,7 @@ jobs:
         if: ${{ !cancelled() }}
         with:
           path: build/desktop-upload
-          key: desktop-upload-${{ matrix.target.platform }}-${{ hashFiles('patches/**') }}-${{ github.sha }}
+          key: desktop-upload-${{ matrix.target.platform }}-ruby${{ matrix.ruby.abi }}-${{ hashFiles('patches/**') }}-${{ github.sha }}
 
       - name: Stage the objects
         shell: bash
