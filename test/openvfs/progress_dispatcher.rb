@@ -32,8 +32,7 @@ describe OpenVFS::ProgressDispatcher do
   end
 
   it "exposes the per-file progress a run keeps" do
-    # A dispatcher outside a sync run has nothing in flight, so what is checked here is the
-    # shape: current_items is a hash, and the classes a populated one hands back exist.
+    # A dispatcher outside a sync run has nothing in flight, so what is checked here is the shape: current_items is a hash, and the classes a populated one hands back exist.
     expect(OpenVFS::ProgressInfo.instance_methods(false)).to be(:include?, :current_items)
     expect(OpenVFS::ProgressItem.instance_methods(false).sort).to be == [:item, :progress]
     expect(OpenVFS::Progress.instance_methods(false).sort).to be == [:completed, :estimates, :remaining]
