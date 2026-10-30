@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-10-30
+
+### Fixed
+
+- The precompiled platform gems are selectable. Each one now carries an object per Ruby ABI - 3.3, 3.4 and 4.0, under `lib/openvfs/<abi>/` - so `required_ruby_version` is the range `>= 3.3, < 4.1.dev` and no `required_rubygems_version` floor is set. A gem built for one ABI has to pin that ABI, and then its name, version and platform no longer identify it, which puts it in rubygems.org's content-addressable scheme; pushing there is refused unless the floor is `">= 4.1.0.a"`, a prerelease almost nothing meets. That is why 1.1.0's platform gems were published and then never chosen by bundler, and why 1.1.1 published only a source gem. This is the layout vodozemac-rb gets from rb-sys.
+
+### Changed
+
+- `lib/openvfs.rb` and `lib/openvfs/occ.rb` require the object for the running Ruby, falling back to the plain require the load path answers, which is what a source gem and the working tree need.
+- The Cross Compile workflow builds in two stages: `cross-objects` compiles every platform and ABI pair, and `cross-gem` collects one platform's ABIs into one gem. Packaging compiles nothing, so it runs without the native dependencies whatever platform the gem is for.
+- `flake.nix` exposes a shell per Ruby ABI - `nix develop .#ruby-33` - since the objects for each have to be built somewhere, and the default shell is unchanged.
+
 ## [1.1.1] - 2026-10-29
 
 ### Fixed

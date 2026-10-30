@@ -1,14 +1,24 @@
 name: Cross Compile
 
-# Cross-compiles the C++/Qt native extensions and packages each one into a
-# precompiled platform gem, uploaded as that job's artifact. Mirrors the structure
-# of vodozemac-rb's cross-compile workflow, whose oxidize-rb/actions/cross-gem step
-# likewise produces a gem per job; here bin/package-platform-gem does that, because
-# that action builds Rust extensions only. Adapted for a C++ native gem whose
-# dependencies (Qt 6, the OpenVFS library, the trimmed OpenCloud Desktop static
-# library) are built via nix.
+# Cross-compiles the C++/Qt native extensions and packages them into precompiled,
+# per-platform native gems, uploaded as build artifacts. This does NOT publish to
+# RubyGems — releasing is bin/release-gem, which downloads these and pushes them.
 #
-# Linux and macOS build inside nix (the flake provides all native deps).
+# A compiled object only loads on the Ruby ABI it was built against, so one gem per
+# platform carries one object per ABI, under lib/openvfs/3.4 and so on, and
+# lib/openvfs.rb picks by RUBY_VERSION. That is why this is two stages: cross-objects
+# compiles every (platform, ABI) pair, and cross-gem collects a platform's ABIs into
+# one gem. vodozemac-rb gets the same layout from rb-sys, whose ExtensionTask
+# cross-compiles every ABI in one step; that toolchain is Rust-only, so the matrix does
+# it here.
+#
+# Covering a range of ABIs is also what keeps these gems out of rubygems.org's
+# content-addressable scheme, which refuses a push unless required_rubygems_version is
+# ">= 4.1.0.a" - a prerelease floor almost nothing meets. A gem built for a single ABI
+# has to say so, and then name, version and platform no longer identify it.
+#
+# Linux and macOS build inside nix, whose flake provides both the native dependencies
+# and a shell per Ruby ABI.
 #
 # Windows cannot use nix, so it builds the same static library with CMake against
 # MSYS2's ucrt64 toolchain - the one RubyInstaller's own ucrt builds use - and
@@ -16,9 +26,6 @@ name: Cross Compile
 # libopenvfs, which keeps its placeholder state in POSIX extended attributes, and
 # upstream gates its desktop plugin behind `if (NOT WIN32)` for that reason. The gem
 # configures `virtualFilesMode=off`, so nothing in the API surface needs it.
-#
-# This does NOT publish to RubyGems — releasing is a manual step you perform
-# with the built gems (see README).
 
 on:
   push:
@@ -26,10 +33,10 @@ on:
     paths:
       - 'ext/**'
       - 'openvfs-rb.gemspec'
-      - 'Rakefile'
       - 'flake.nix'
       - 'flake.lock'
       - 'gemset.nix'
+      - 'bin/package-platform-gem'
       - '.github/workflows/cross-compile.yml'
       - 'lib/**'
       # The patches decide which desktop sources are compiled at all, and the
@@ -51,43 +58,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ci-data:
-    name: Fetch the supported platforms and Ruby versions
-    runs-on: ubuntu-latest
-    outputs:
-      result: ${{ steps.fetch.outputs.result }}
-    steps:
-      - uses: oxidize-rb/actions/fetch-ci-data@v1
-        id: fetch
-        with:
-          supported-ruby-platforms: true
-          stable-ruby-versions: |
-            exclude: [head]
-
-  cross-gem:
-    name: Compile native gem for ${{ matrix.platform }}
-    runs-on: ${{ matrix.os }}
-    needs: ci-data
+  cross-objects:
+    name: Compile ${{ matrix.target.platform }} objects for Ruby ${{ matrix.ruby.abi }}
+    runs-on: ${{ matrix.target.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: x86_64-linux
-            gem_platform: x86_64-linux
-            os: ubuntu-latest
-            ruby: "3.4"
-          - platform: aarch64-linux
-            gem_platform: aarch64-linux
-            os: ubuntu-24.04-arm
-            ruby: "3.4"
-          - platform: x86_64-darwin
-            gem_platform: x86_64-darwin
-            os: macos-15-intel
-            ruby: "3.4"
-          - platform: aarch64-darwin
-            gem_platform: arm64-darwin
-            os: macos-15
-            ruby: "3.4"
+        # Every ABI has to build, or bin/package-platform-gem refuses to package: a gem
+        # whose required_ruby_version covers an ABI it has no object for would install
+        # and then fail to load. The set has to match RUBY_ABIS there, and the shells in
+        # flake.nix.
+        ruby:
+          - { abi: "3.3", shell: ruby-33 }
+          - { abi: "3.4", shell: ruby-34 }
+          - { abi: "4.0", shell: ruby-40 }
+        target:
+          - { platform: x86_64-linux, os: ubuntu-latest }
+          - { platform: aarch64-linux, os: ubuntu-24.04-arm }
+          - { platform: x86_64-darwin, os: macos-15-intel }
+          - { platform: aarch64-darwin, os: macos-15 }
     steps:
       - uses: actions/checkout@v4
         with:
@@ -102,37 +91,38 @@ jobs:
 
       - name: Build native extensions
         run: |
-          nix develop --command ruby -C ext/openvfs extconf.rb
-          nix develop --command make -C ext/openvfs
-          nix develop --command ruby -C ext/openvfs/occ extconf.rb
-          nix develop --command make -C ext/openvfs/occ
+          nix develop .#${{ matrix.ruby.shell }} --command ruby -C ext/openvfs extconf.rb
+          nix develop .#${{ matrix.ruby.shell }} --command make -C ext/openvfs
+          nix develop .#${{ matrix.ruby.shell }} --command ruby -C ext/openvfs/occ extconf.rb
+          nix develop .#${{ matrix.ruby.shell }} --command make -C ext/openvfs/occ
 
       - name: Run the suite
-        run: nix develop --command bundle exec sus
+        run: nix develop .#${{ matrix.ruby.shell }} --command bundle exec sus
 
-      # The gem is built here rather than at release time, the way vodozemac-rb's
-      # oxidize-rb/actions/cross-gem step does it: the artifact is then a gem whose
-      # filename carries its version, so releasing is download-and-push.
-      - name: Package the platform gem
-        run: nix develop --command bin/package-platform-gem ${{ matrix.gem_platform }}
+      - name: Stage the objects
+        run: |
+          mkdir -p objects
+          cp ext/openvfs/openvfs.* objects/
+          cp ext/openvfs/occ/occ.* objects/
 
       - uses: actions/upload-artifact@v4
         with:
-          name: cross-gem-${{ matrix.platform }}
-          path: pkg/*.gem
+          name: objects-${{ matrix.target.platform }}-${{ matrix.ruby.abi }}
+          path: objects/*
           if-no-files-found: error
 
-  cross-gem-windows:
-    name: Compile native gem for ${{ matrix.platform }}
-    runs-on: ${{ matrix.os }}
+  cross-objects-windows:
+    name: Compile ${{ matrix.target.platform }} objects for Ruby ${{ matrix.ruby.abi }}
+    runs-on: ${{ matrix.target.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: x64-mingw-ucrt
-            gem_platform: x64-mingw-ucrt
-            os: windows-2025
-            ruby: "3.4"
+        ruby:
+          - { abi: "3.3" }
+          - { abi: "3.4" }
+          - { abi: "4.0" }
+        target:
+          - { platform: x64-mingw-ucrt, os: windows-2025 }
     steps:
       # The patches are LF, and git-for-windows would otherwise check the submodule
       # out with CRLF and make every one of them fail to apply.
@@ -145,7 +135,7 @@ jobs:
 
       - uses: ruby/setup-ruby-pkgs@v1
         with:
-          ruby-version: ${{ matrix.ruby }}
+          ruby-version: ${{ matrix.ruby.abi }}
           mingw: cmake ninja pkgconf qt6-base qtkeychain sqlite3 zlib extra-cmake-modules
 
       - name: Apply the desktop patches
@@ -154,15 +144,16 @@ jobs:
 
       # The build tree, not the install prefix: ninja then recompiles only the files a
       # patch actually changed instead of all 80 again. The runner's workspace path is
-      # stable, so the absolute paths in CMakeCache stay valid between runs.
+      # stable, so the absolute paths in CMakeCache stay valid between runs. The library
+      # links no Ruby, so every ABI's job shares one cache entry.
       - uses: actions/cache/restore@v4
         id: cache
         with:
           path: build/desktop-upload
-          key: desktop-upload-${{ matrix.platform }}-${{ hashFiles('patches/**') }}-${{ github.sha }}
+          key: desktop-upload-${{ matrix.target.platform }}-${{ hashFiles('patches/**') }}-${{ github.sha }}
           restore-keys: |
-            desktop-upload-${{ matrix.platform }}-${{ hashFiles('patches/**') }}-
-            desktop-upload-${{ matrix.platform }}-
+            desktop-upload-${{ matrix.target.platform }}-${{ hashFiles('patches/**') }}-
+            desktop-upload-${{ matrix.target.platform }}-
 
       - name: Build the trimmed desktop static library
         shell: pwsh
@@ -215,14 +206,68 @@ jobs:
         if: ${{ !cancelled() }}
         with:
           path: build/desktop-upload
-          key: desktop-upload-${{ matrix.platform }}-${{ hashFiles('patches/**') }}-${{ github.sha }}
+          key: desktop-upload-${{ matrix.target.platform }}-${{ hashFiles('patches/**') }}-${{ github.sha }}
 
-      - name: Package the platform gem
-        shell: pwsh
-        run: ruby bin/package-platform-gem ${{ matrix.gem_platform }}
+      - name: Stage the objects
+        shell: bash
+        run: |
+          mkdir -p objects
+          cp ext/openvfs/occ/occ.so objects/
 
       - uses: actions/upload-artifact@v4
         with:
-          name: cross-gem-${{ matrix.platform }}
+          name: objects-${{ matrix.target.platform }}-${{ matrix.ruby.abi }}
+          path: objects/*
+          if-no-files-found: error
+
+  cross-gem:
+    name: Package native gem for ${{ matrix.target.platform }}
+    runs-on: ubuntu-latest
+    needs: [cross-objects, cross-objects-windows]
+    strategy:
+      fail-fast: false
+      matrix:
+        # The platform the objects were built for, and the name RubyGems knows it by:
+        # Apple silicon is arm64-darwin there, and a gem named aarch64-darwin would
+        # never be selected.
+        target:
+          - { platform: x86_64-linux, gem_platform: x86_64-linux }
+          - { platform: aarch64-linux, gem_platform: aarch64-linux }
+          - { platform: x86_64-darwin, gem_platform: x86_64-darwin }
+          - { platform: aarch64-darwin, gem_platform: arm64-darwin }
+          - { platform: x64-mingw-ucrt, gem_platform: x64-mingw-ucrt }
+    steps:
+      - uses: actions/checkout@v4
+
+      # Packaging compiles nothing - it copies already-built objects into a gem - so it
+      # wants a Ruby and none of the native dependencies, whatever platform the gem is for.
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: objects-${{ matrix.target.platform }}-*
+          path: objects
+
+      # download-artifact names a directory per artifact, so flatten
+      # objects/objects-<platform>-<abi>/ down to the objects/<abi>/ layout
+      # bin/package-platform-gem reads.
+      - name: Arrange the objects by ABI
+        run: |
+          for directory in objects/objects-${{ matrix.target.platform }}-*; do
+            abi="${directory##*-}"
+            mkdir -p "objects/$abi"
+            mv "$directory"/* "objects/$abi/"
+            rmdir "$directory"
+          done
+          find objects -type f | sort
+
+      - name: Package the platform gem
+        run: ruby bin/package-platform-gem ${{ matrix.target.gem_platform }} objects
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cross-gem-${{ matrix.target.platform }}
           path: pkg/*.gem
           if-no-files-found: error

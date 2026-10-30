@@ -2,7 +2,13 @@
 
 # Deliberately not "../openvfs": that pulls in the openvfs extension, which wraps the placeholder attributes libopenvfs keeps in extended attributes. Nothing here needs them, and upstream ships no Windows build of that library.
 require_relative "version"
-require "openvfs/occ/occ"
+
+# One object per Ruby ABI in a platform gem, and in the source gem the single one extconf built under ext/. See lib/openvfs.rb.
+begin
+  require_relative "occ/#{RUBY_VERSION[/\d+\.\d+/]}/occ"
+rescue LoadError
+  require "openvfs/occ/occ"
+end
 
 require "fileutils"
 require "securerandom"

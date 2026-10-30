@@ -10,13 +10,15 @@
 #      bin/package-platform-gem — build one precompiled platform gem from the objects in ext/
 #
 # SYNOPSIS
-#      bin/package-platform-gem PLATFORM
+#      bin/package-platform-gem PLATFORM [OBJECTS_DIR]
 #
 # DESCRIPTION
-#      Builds pkg/openvfs-rb-X.Y.Z-PLATFORM.gem from whatever has already been compiled into
-#      ext/, where PLATFORM is a RubyGems platform such as x86_64-linux or arm64-darwin.
+#      Builds pkg/openvfs-rb-X.Y.Z-PLATFORM.gem from the objects under OBJECTS_DIR, which
+#      holds one directory per Ruby ABI - OBJECTS_DIR/3.4/occ.so and so on. PLATFORM is a
+#      RubyGems platform such as x86_64-linux or arm64-darwin. OBJECTS_DIR defaults to
+#      ./objects.
 #
-#      This runs in CI, once per matrix job, right after that job has built its objects. The
+#      This runs in CI, once per platform, after every ABI for that platform has been built. The
 #      Cross Compile workflow uploads the gem it produces, so what the release downloads is
 #      already a gem. That is how vodozemac-rb works - its oxidize-rb/actions/cross-gem step
 #      builds the platform gem in the job - and it is why bin/release-gem does nothing but
@@ -25,13 +27,17 @@
 #
 #      A platform gem is the ordinary gemspec with three changes: the platform is set, the
 #      extensions are cleared so that RubyGems unpacks instead of compiling, and the Ruby
-#      requirement is narrowed to the ABI the objects were compiled against, because a
-#      compiled object only loads on the Ruby it was built for.
+#      requirement is the range RUBY_ABIS covers.
 #
-#      Nothing sets required_rubygems_version. A platform gem needs no floor to be resolved
-#      by a current RubyGems, and the floor this script used to set - ">= 4.1.0.a" - asked
-#      for a prerelease RubyGems that almost nothing has, which made the platform gems
-#      unselectable: bundler skipped them and resolved the source gem instead.
+#      One object per Ruby ABI is the whole point, and it is why nothing here sets
+#      required_rubygems_version. A compiled object only loads on the Ruby it was built for,
+#      so a gem built for one ABI has to say so - and then name, version and platform no
+#      longer identify it, since the same three could describe a build for another ABI.
+#      Disambiguating those is what rubygems.org's content-addressable scheme is for, and
+#      pushing into it is refused unless required_rubygems_version is ">= 4.1.0.a" - a
+#      prerelease floor almost nothing meets, which is why 1.1.0's platform gems were
+#      published but never selected. Covering a range of ABIs instead sidesteps all of it,
+#      which is what vodozemac-rb does: one gem per platform, one object per ABI inside.
 #
 # EXIT STATUS
 #      The bin/package-platform-gem utility exits 0 on success, and >0 if an error occurs.
@@ -50,13 +56,24 @@ $stdout.sync = true
 root = File.expand_path("..", __dir__)
 Dir.chdir(root)
 
-# The matrix builds one Ruby, and an object is tied to the ABI it was compiled against, so this has to match `ruby:` in the workflow.
-COMPILED_RUBY_ABI = "3.4"
+# An object only loads on the Ruby ABI it was compiled against, so a platform gem carries one per ABI and lib/openvfs.rb picks by RUBY_VERSION. Covering a range is also what keeps the gem out of rubygems.org's content-addressable scheme: name, version and platform identify it on their own, so no `required_rubygems_version` floor is needed. Pinning one ABI is what forced the ">= 4.1.0.a" floor that made 1.1.0's platform gems unselectable.
+# Each ABI listed here has to be a directory under the objects root, and the workflow builds one per entry.
+RUBY_ABIS = ["3.3", "3.4", "4.0"].freeze
+
+# The range the ABIs above cover. The upper bound is exclusive of the next ABI after the last one built.
+RUBY_REQUIREMENT = [">= #{RUBY_ABIS.first}", "< 4.1.dev"].freeze
 
 gem_platform = ARGV.first
 
 if gem_platform.nil? || gem_platform.start_with?("-")
-  abort "usage: bin/package-platform-gem PLATFORM"
+  abort "usage: bin/package-platform-gem PLATFORM [OBJECTS_DIR]"
+end
+
+# Where the per-ABI objects are: OBJECTS_DIR/<abi>/openvfs.<dlext> and OBJECTS_DIR/<abi>/occ.<dlext>. The workflow builds into one directory per ABI and passes the root.
+objects_root = ARGV[1] || "objects"
+
+unless File.directory?(objects_root)
+  abort "ERROR: #{objects_root} is not a directory; build the objects before packaging."
 end
 
 gemspec = "openvfs-rb.gemspec"
@@ -66,16 +83,6 @@ source_spec = Gem::Specification.load(gemspec)
 if source_spec.nil?
   abort "ERROR: could not load #{gemspec}"
 end
-
-# Whatever this job built: the Windows gem has occ alone, because upstream ships no Windows build of libopenvfs.
-openvfs_object = Dir["ext/openvfs/openvfs.{so,bundle}"].first
-occ_object = Dir["ext/openvfs/occ/occ.{so,bundle}"].first
-
-if occ_object.nil?
-  abort "ERROR: no compiled occ object in ext/openvfs/occ; build it before packaging."
-end
-
-dlext = File.extname(occ_object).delete_prefix(".")
 
 FileUtils.mkdir_p(pkg_dir)
 
@@ -94,27 +101,38 @@ carried.each do |path|
   FileUtils.cp(path, destination)
 end
 
-# Into lib/, under the names the requires already ask for: lib/openvfs.rb does `require "openvfs/openvfs"` and lib/openvfs/occ.rb does `require "openvfs/occ/occ"`.
+# Into the ABI directories the requires ask for: lib/openvfs.rb does `require_relative "openvfs/3.4/openvfs"` and lib/openvfs/occ.rb does `require_relative "occ/3.4/occ"`.
 staged = []
 
-unless openvfs_object.nil?
-  destination = File.join(staging, "lib/openvfs/openvfs.#{dlext}")
+RUBY_ABIS.each do |abi|
+  # Whatever that ABI's job built: the Windows gem has occ alone, because upstream ships no Windows build of libopenvfs.
+  openvfs_object = Dir["#{objects_root}/#{abi}/openvfs.{so,bundle}"].first
+  occ_object = Dir["#{objects_root}/#{abi}/occ.{so,bundle}"].first
 
-  FileUtils.mkdir_p(File.dirname(destination))
-  FileUtils.cp(openvfs_object, destination)
-  staged << "lib/openvfs/openvfs.#{dlext}"
+  if occ_object.nil?
+    abort "ERROR: #{objects_root}/#{abi} holds no occ object; every ABI in RUBY_ABIS has to be built, or the gem would claim a Ruby it cannot load on."
+  end
+
+  dlext = File.extname(occ_object).delete_prefix(".")
+
+  {"openvfs/#{abi}/openvfs" => openvfs_object, "openvfs/occ/#{abi}/occ" => occ_object}.each do |stem, object|
+    if object.nil?
+      next
+    end
+
+    relative = "lib/#{stem}.#{dlext}"
+    destination = File.join(staging, relative)
+
+    FileUtils.mkdir_p(File.dirname(destination))
+    FileUtils.cp(object, destination)
+    staged << relative
+  end
 end
-
-destination = File.join(staging, "lib/openvfs/occ/occ.#{dlext}")
-
-FileUtils.mkdir_p(File.dirname(destination))
-FileUtils.cp(occ_object, destination)
-staged << "lib/openvfs/occ/occ.#{dlext}"
 
 spec = source_spec.dup
 spec.platform = Gem::Platform.new(gem_platform)
 spec.extensions = []
-spec.required_ruby_version = "~> #{COMPILED_RUBY_ABI}.0"
+spec.required_ruby_version = RUBY_REQUIREMENT
 spec.files = carried + staged
 
 built = Dir.chdir(staging){Gem::Package.build(spec)}

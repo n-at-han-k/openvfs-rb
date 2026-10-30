@@ -121,14 +121,59 @@
           cp ${./lib/openvfs/version.rb}        $out/lib/openvfs/version.rb
         '';
 
-        gems = pkgs.bundlerEnv {
+        gemsFor = ruby: pkgs.bundlerEnv {
           name = "openvfs-rb-gems";
-          ruby = pkgs.ruby_3_4;
+          inherit ruby;
           gemfile = ./Gemfile;
           lockfile = ./Gemfile.lock;
           gemset = ./gemset.nix;
           extraConfigPaths = [ "${gemspecFiles}/." ];
         };
+
+        # A compiled object only loads on the Ruby ABI it was built against, so a precompiled
+        # platform gem carries one per ABI and lib/openvfs.rb picks by RUBY_VERSION. Cross
+        # Compile builds each of these, which is why there is a shell per Ruby. The set has to
+        # match RUBY_ABIS in bin/package-platform-gem. The shell drops the dot from its name -
+        # `nix develop .#ruby-33` - because nix splits an installable's attribute path on dots.
+        rubies = {
+          "33" = pkgs.ruby_3_3;
+          "34" = pkgs.ruby_3_4;
+          "40" = pkgs.ruby_4_0;
+        };
+
+        shellFor = ruby:
+          let
+            gems = gemsFor ruby;
+          in
+          lib.mkRubyShell {
+            buildInputs = [
+              gems
+              gems.wrappedRuby
+              openvfsLibrary
+              desktopUpload
+              pkgs.qt6.qtbase
+              pkgs.pkg-config
+              pkgs.gcc
+              pkgs.nlohmann_json
+            ];
+
+            shellHook = /* bash */ ''
+              export BUNDLE_FORCE_RUBY_PLATFORM=true
+              export BUNDLE_GEMFILE="$PWD/Gemfile"
+              export BUNDLE_FROZEN=false
+
+              export LANG="''${LANG:-C.UTF-8}"
+              export LC_ALL="''${LC_ALL:-$LANG}"
+              export OPENVFS_PREFIX="${openvfsLibrary}"
+              export OPENCLOUD_UPLOAD_PREFIX="${desktopUpload}"
+
+              # This gem is not in the bundle — it is the repository — so put this lib/ and
+              # fixtures/ on the load path and let `require "openvfs"` find the working tree.
+              export RUBYLIB="$PWD/lib:$PWD/ext:$PWD/fixtures''${RUBYLIB:+:$RUBYLIB}"
+            '';
+          };
+
+        gems = gemsFor pkgs.ruby_3_4;
 
       in
       {
@@ -140,32 +185,10 @@
         packages.gems = gems;
         packages.wrapped-ruby = gems.wrappedRuby;
 
-        devShells.default = lib.mkRubyShell {
-          buildInputs = with pkgs; [
-            gems
-            gems.wrappedRuby
-            openvfsLibrary
-            desktopUpload
-            pkgs.qt6.qtbase
-            pkgs.pkg-config
-            pkgs.gcc
-            pkgs.nlohmann_json
-          ];
-
-          shellHook = /* bash */ ''
-            export BUNDLE_FORCE_RUBY_PLATFORM=true
-            export BUNDLE_GEMFILE="$PWD/Gemfile"
-            export BUNDLE_FROZEN=false
-
-            export LANG="''${LANG:-C.UTF-8}"
-            export LC_ALL="''${LC_ALL:-$LANG}"
-            export OPENVFS_PREFIX="${openvfsLibrary}"
-            export OPENCLOUD_UPLOAD_PREFIX="${desktopUpload}"
-
-            # This gem is not in the bundle — it is the repository — so put this lib/ and
-            # fixtures/ on the load path and let `require "openvfs"` find the working tree.
-            export RUBYLIB="$PWD/lib:$PWD/ext:$PWD/fixtures''${RUBYLIB:+:$RUBYLIB}"
-          '';
+        devShells = pkgs.lib.mapAttrs' (abi: ruby:
+          pkgs.lib.nameValuePair "ruby-${abi}" (shellFor ruby)
+        ) rubies // {
+          default = shellFor pkgs.ruby_3_4;
         };
       }
     );
