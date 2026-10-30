@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-10-30
+
+### Added
+
+- `OpenVFS::ProgressInfo#current_items`, the files a run has in flight, as a hash of the path the engine names a file by to an `OpenVFS::ProgressItem`. This is what a per-file progress bar reads; `ProgressInfo`'s own totals are the whole run, and `#file_progress` gives a file's bandwidth and eta but not how much of it has gone.
+- `OpenVFS::ProgressItem`, with `#item` and `#progress`. Both hand back a copy, so a block may keep them after the signal returns - the engine drops its own entry when the file finishes.
+- `OpenVFS::Progress`, with `#completed`, `#remaining` and `#estimates`.
+
 ## [1.1.2] - 2026-10-30
 
 ### Fixed

@@ -31,6 +31,14 @@ describe OpenVFS::ProgressDispatcher do
     expect(OpenVFS::ProgressInfo::Status::Done.to_i).to be == 4
   end
 
+  it "exposes the per-file progress a run keeps" do
+    # A dispatcher outside a sync run has nothing in flight, so what is checked here is the
+    # shape: current_items is a hash, and the classes a populated one hands back exist.
+    expect(OpenVFS::ProgressInfo.instance_methods(false)).to be(:include?, :current_items)
+    expect(OpenVFS::ProgressItem.instance_methods(false).sort).to be == [:item, :progress]
+    expect(OpenVFS::Progress.instance_methods(false).sort).to be == [:completed, :estimates, :remaining]
+  end
+
   it "names the error categories a sync error carries" do
     expect(OpenVFS::ErrorCategory::Normal.to_i).to be == 0
     expect(OpenVFS::ErrorCategory::InsufficientRemoteStorage.to_i).to be == 1

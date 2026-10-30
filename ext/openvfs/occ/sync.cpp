@@ -636,6 +636,26 @@ extern "C" void Init_occ()
             .define_attr("estimated_bandwidth", &OCC::ProgressInfo::Estimates::estimatedBandwidth, Rice::AttrAccess::Read)
             .define_attr("estimated_eta", &OCC::ProgressInfo::Estimates::estimatedEta, Rice::AttrAccess::Read);
 
+        // One file's share of the run. The engine keeps a Progress per file in flight and
+        // discards it when the file finishes, so this is what a per-file progress bar reads;
+        // ProgressInfo's own totals are the whole run.
+        Data_Type<OCC::ProgressInfo::Progress> rb_cProgress =
+            define_class_under<OCC::ProgressInfo::Progress>(rb_mOpenVFS, "Progress")
+            .define_method("completed", &OCC::ProgressInfo::Progress::completed)
+            .define_method("remaining", &OCC::ProgressInfo::Progress::remaining)
+            .define_method("estimates", &OCC::ProgressInfo::Progress::estimates);
+
+        Data_Type<OCC::ProgressInfo::ProgressItem> rb_cProgressItem =
+            define_class_under<OCC::ProgressInfo::ProgressItem>(rb_mOpenVFS, "ProgressItem")
+            // Both by value, so Ruby owns a copy and may keep it after the signal returns -
+            // the engine's own entry goes when the file does.
+            .define_method("item", [](const OCC::ProgressInfo::ProgressItem &self) {
+                return OCC::SyncFileItemPtr::create(self._item);
+            })
+            .define_method("progress", [](const OCC::ProgressInfo::ProgressItem &self) {
+                return self._progress;
+            });
+
         Data_Type<OCC::ProgressInfo> rb_cProgressInfo =
             define_class_under<OCC::ProgressInfo>(rb_mOpenVFS, "ProgressInfo")
             .define_method("status", &OCC::ProgressInfo::status)
@@ -652,6 +672,18 @@ extern "C" void Init_occ()
             .define_method("file_progress", [](const OCC::ProgressInfo &self, const OCC::SyncFileItemPtr &item) {
                 return self.fileProgress(*item);
             }, Arg("item"))
+            // The files in flight, keyed by the path the engine names them by. A Hash rather
+            // than the QHash itself: Rice ships no converter for one, and what a caller wants
+            // is to look a path up.
+            .define_method("current_items", [](const OCC::ProgressInfo &self) {
+                Hash items;
+
+                for (auto entry = self._currentItems.constBegin(); entry != self._currentItems.constEnd(); ++entry) {
+                    items[entry.key()] = entry.value();
+                }
+
+                return items;
+            })
             .define_method("current_discovered_remote_folder", [](const OCC::ProgressInfo &self) {
                 return self._currentDiscoveredRemoteFolder;
             })
