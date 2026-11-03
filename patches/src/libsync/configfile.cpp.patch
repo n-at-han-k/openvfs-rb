@@ -1,5 +1,5 @@
 diff --git a/src/libsync/configfile.cpp b/src/libsync/configfile.cpp
-index 2359d8d..db5c9bb 100644
+index 2359d8d..588a2b6 100644
 --- a/src/libsync/configfile.cpp
 +++ b/src/libsync/configfile.cpp
 @@ -13,13 +13,13 @@
@@ -71,18 +71,20 @@ index 2359d8d..db5c9bb 100644
  
  QString ConfigFile::configPath()
  {
-@@ -225,7 +186,9 @@ QString ConfigFile::excludeFile(Scope scope) const
+@@ -225,7 +186,11 @@ QString ConfigFile::excludeFile(Scope scope) const
  
  QString ConfigFile::defaultExcludeFile()
  {
 -    return QStringLiteral(":/client/OpenCloud/theme/universal/%1").arg(excludeFileNameC());
 +    // Upstream reads this from the resources library's Qt resources, which are not
-+    // built here; the build installs the file and names its path instead.
-+    return QStringLiteral(OPENCLOUD_SYNC_EXCLUDE_FILE);
++    // built here. The gem ships the file and names it in the environment; the path
++    // this build installed it at is only the fallback, because it is this machine's.
++    const auto named = qEnvironmentVariable("OPENCLOUD_SYNC_EXCLUDE_FILE");
++    return named.isEmpty() ? QStringLiteral(OPENCLOUD_SYNC_EXCLUDE_FILE) : named;
  }
  
  QString ConfigFile::backup() const
-@@ -250,7 +213,7 @@ QString ConfigFile::backup() const
+@@ -250,7 +215,7 @@ QString ConfigFile::backup() const
  
  QString ConfigFile::configFile()
  {
@@ -91,7 +93,7 @@ index 2359d8d..db5c9bb 100644
  }
  
  QSettings ConfigFile::makeQSettings()
-@@ -421,10 +384,6 @@ void ConfigFile::setPauseSyncWhenMetered(bool isChecked)
+@@ -421,10 +386,6 @@ void ConfigFile::setPauseSyncWhenMetered(bool isChecked)
  
  bool ConfigFile::moveToTrash() const
  {

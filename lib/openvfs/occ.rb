@@ -10,6 +10,11 @@ rescue LoadError
   require "openvfs/occ/occ"
 end
 
+# The default exclude list, which the client loads before it will sync anything: SyncEngine::loadDefaultExcludes fails without it, and Folder's constructor then puts the folder in SyncResult::SetupError and returns, so the account connects and authenticates and nothing is ever scheduled or watched.
+#
+# It ships in the gem and is named here because ConfigFile::defaultExcludeFile falls back to the path the build installed it at, which is the build machine's and not any other's.
+ENV["OPENCLOUD_SYNC_EXCLUDE_FILE"] ||= File.expand_path("occ/sync-exclude.lst", __dir__)
+
 require "fileutils"
 require "securerandom"
 require "uri"

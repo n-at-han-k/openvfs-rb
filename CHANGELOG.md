@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-03
+
+### Fixed
+
+- A folder actually syncs from an installed gem. `ConfigFile::defaultExcludeFile` named the path the build installed the default exclude list at, which is the build machine's datadir and exists nowhere else, and `SyncEngine::loadDefaultExcludes` fails without that file - so `Folder`'s constructor left the folder in `SyncResult::SetupError`, with nothing watched and nothing ever scheduled. The account still connected and authenticated first, so the symptom was a sync that logged nothing wrong and never ran.
+
+### Added
+
+- The gem ships the default exclude list as `lib/openvfs/occ/sync-exclude.lst`, and `require "openvfs/occ"` points the client at it by setting `ENV["OPENCLOUD_SYNC_EXCLUDE_FILE"]` unless it is already set.
+- `OPENCLOUD_SYNC_EXCLUDE_FILE` overrides which list `ConfigFile::defaultExcludeFile` returns, for callers wanting their own patterns in the system-scope list. Set it before the require. The compiled-in path remains the fallback.
+
 ## [1.2.0] - 2026-10-30
 
 ### Changed
