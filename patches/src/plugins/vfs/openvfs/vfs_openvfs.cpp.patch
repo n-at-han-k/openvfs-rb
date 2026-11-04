@@ -1,5 +1,5 @@
 diff --git a/src/plugins/vfs/openvfs/vfs_openvfs.cpp b/src/plugins/vfs/openvfs/vfs_openvfs.cpp
-index c869dff..f0cb6bc 100644
+index c869dff..e5c392f 100644
 --- a/src/plugins/vfs/openvfs/vfs_openvfs.cpp
 +++ b/src/plugins/vfs/openvfs/vfs_openvfs.cpp
 @@ -10,7 +10,6 @@
@@ -22,7 +22,19 @@ index c869dff..f0cb6bc 100644
  #include <QString>
  #include <QUuid>
  
-@@ -45,7 +46,7 @@ OCC::FileSystem::Path openVFSExePath()
+@@ -39,13 +40,19 @@ OCC::FileSystem::Path openVFSExePath()
+     if (binary.exists()) {
+         return binary;
+     }
++    // OPENVFS_EXE is baked at build time, so an installed gem names the path of
++    // the machine which built it.
++    const auto onPath = QStandardPaths::findExecutable(QString::fromStdString(openVFS.get().filename().string()));
++    if (!onPath.isEmpty()) {
++        return OCC::FileSystem::Path(std::filesystem::path(onPath.toStdString()));
++    }
+     return openVFS;
+ }
+ 
  
  QString xattrOwnerString(const QUuid &accountUuid)
  {

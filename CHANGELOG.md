@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - The OpenVFS virtual filesystem is built into the sync client, so a folder can be set up with `Vfs::Mode::OpenVFS` and leaves placeholders which hydrate when a file is opened. Only `vfs/off` was compiled before, which is the only mode `bestAvailableVfsMode` could return, so every folder downloaded everything on the server in full.
-- The gem ships the `openvfs` fuse binary which mounts that layer. The plugin spawns it by the path it was built with, and reports the mode unavailable when `/dev/fuse` or `fusermount3` is missing.
+- The gem ships the `openvfs` fuse binary which mounts that layer, and reports the mode unavailable when `/dev/fuse` or `fusermount3` is missing. The plugin looks for the binary on `PATH` when the path it was built with is not there, which for an installed gem is a build machine's.
 
 ## [1.3.0] - 2026-11-03
 
