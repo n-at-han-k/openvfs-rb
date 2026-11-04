@@ -1,8 +1,8 @@
 diff --git a/src/libsync/CMakeLists.txt b/src/libsync/CMakeLists.txt
-index 3156120..c96af57 100644
+index 3156120..d1b5f41 100644
 --- a/src/libsync/CMakeLists.txt
 +++ b/src/libsync/CMakeLists.txt
-@@ -1,186 +1,312 @@
+@@ -1,186 +1,329 @@
 -find_package(LibreGraphAPI 1.0.8 REQUIRED)
 -set_package_properties(LibreGraphAPI PROPERTIES
 -        URL https://github.com/opencloud-eu/libre-graph-api-cpp-qt-client
@@ -313,8 +313,25 @@ index 3156120..c96af57 100644
 +        # Only this one header, by its own directory: the SDK's um directory
 +        # holds windows.h and the rest of them too, and putting that on the
 +        # include path would shadow mingw's own for every file here.
++        #
++        # It is the SDK's, so it is written for MSVC: it tests _MSC_VER, which
++        # -Werror=undef makes fatal, and pushes MSVC warning pragmas. Its
++        # CorrelationVector fields come from a sibling header which MSVC gets
++        # by another route and mingw does not.
 +        file(WRITE ${CMAKE_BINARY_DIR}/cfapi-include/cfapi.h
-+            "#include \"${CFAPI_INCLUDE_DIR}/cfapi.h\"\n")
++"#pragma once
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored \"-Wundef\"
++#pragma GCC diagnostic ignored \"-Wunknown-pragmas\"
++#if __has_include(\"${CFAPI_INCLUDE_DIR}/correlationvector.h\")
++#include \"${CFAPI_INCLUDE_DIR}/correlationvector.h\"
++#else
++// Only ever a pointer here, so the layout is none of our business.
++typedef struct CORRELATION_VECTOR CORRELATION_VECTOR, *PCORRELATION_VECTOR;
++#endif
++#include \"${CFAPI_INCLUDE_DIR}/cfapi.h\"
++#pragma GCC diagnostic pop
++")
 +        target_include_directories(opencloud-upload PUBLIC ${CMAKE_BINARY_DIR}/cfapi-include)
 +        target_link_libraries(opencloud-upload PUBLIC ${CLDAPI_LIBRARY} windowsapp)
 +        target_compile_definitions(opencloud-upload PUBLIC OPENCLOUD_HAVE_CFAPI)
