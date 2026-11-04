@@ -1,0 +1,12 @@
+diff --git a/src/gui/guiutility_unix.cpp b/src/gui/guiutility_unix.cpp
+index cfb4200..0d45139 100644
+--- a/src/gui/guiutility_unix.cpp
++++ b/src/gui/guiutility_unix.cpp
+@@ -13,7 +13,6 @@
+  */
+ 
+ #include "guiutility.h"
+-#include "theme.h"
+ 
+ #include <QStandardPaths>
+ 

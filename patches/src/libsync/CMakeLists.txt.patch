@@ -1,8 +1,8 @@
 diff --git a/src/libsync/CMakeLists.txt b/src/libsync/CMakeLists.txt
-index 3156120..d8b325a 100644
+index 3156120..5113372 100644
 --- a/src/libsync/CMakeLists.txt
 +++ b/src/libsync/CMakeLists.txt
-@@ -1,186 +1,275 @@
+@@ -1,186 +1,282 @@
 -find_package(LibreGraphAPI 1.0.8 REQUIRED)
 -set_package_properties(LibreGraphAPI PROPERTIES
 -        URL https://github.com/opencloud-eu/libre-graph-api-cpp-qt-client
@@ -72,22 +72,22 @@ index 3156120..d8b325a 100644
 -)
 +include(GNUInstallDirs)
 +include(GenerateExportHeader)
-+
+ 
 +find_package(SQLite3 REQUIRED)
 +find_package(Qt6Keychain REQUIRED)
-+
+ 
+-set_source_files_properties(accessmanager.cpp PROPERTIES COMPILE_DEFINITIONS WITH_HTTP2=$<BOOL:${WITH_HTTP2}>)
 +set(CMAKE_CXX_STANDARD 23)
 +set(CMAKE_CXX_STANDARD_REQUIRED ON)
 +set(CMAKE_AUTOMOC ON)
- 
++
 +file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
 +configure_file(
 +    "${CMAKE_SOURCE_DIR}/src/libsync/common/version.cpp.in"
 +    "${CMAKE_BINARY_DIR}/generated/version.cpp"
 +    @ONLY
 +)
- 
--set_source_files_properties(accessmanager.cpp PROPERTIES COMPILE_DEFINITIONS WITH_HTTP2=$<BOOL:${WITH_HTTP2}>)
++
 +add_library(opencloud-upload STATIC
 +    ${CMAKE_SOURCE_DIR}/src/libsync/abstractnetworkjob.cpp
 +    ${CMAKE_SOURCE_DIR}/src/libsync/accessmanager.cpp
@@ -297,11 +297,17 @@ index 3156120..d8b325a 100644
 -         /System/Library/Frameworks/Foundation.framework
 -         /System/Library/Frameworks/AppKit.framework
 -         /System/Library/Frameworks/IOKit.framework
--    )
--endif()
 +    target_link_libraries(opencloud-upload PUBLIC ${OPENVFS_LIBRARY})
 +    target_include_directories(opencloud-upload PUBLIC ${OPENVFS_INCLUDE_DIR})
-+    target_sources(opencloud-upload PRIVATE ${CMAKE_SOURCE_DIR}/src/plugins/vfs/openvfs/vfs_openvfs.cpp)
++    # The socket api is the plugin's hydration channel: the fuse layer asks over
++    # it for the content of a placeholder somebody opened. Trimmed to that, the
++    # file manager's context menu having been the rest of it.
++    target_sources(opencloud-upload PRIVATE
++        ${CMAKE_SOURCE_DIR}/src/plugins/vfs/openvfs/vfs_openvfs.cpp
++        ${CMAKE_SOURCE_DIR}/src/gui/socketapi/socketapi.cpp
++        ${CMAKE_SOURCE_DIR}/src/gui/guiutility_unix.cpp
+     )
+-endif()
 +    target_compile_definitions(opencloud-upload PRIVATE OPENVFS_EXE="${OPENVFS_EXECUTABLE}")
  
 -if(Inotify_FOUND)

@@ -1,5 +1,5 @@
 diff --git a/src/gui/folderman.h b/src/gui/folderman.h
-index 04245e4..871cbdf 100644
+index 04245e4..90688dc 100644
 --- a/src/gui/folderman.h
 +++ b/src/gui/folderman.h
 @@ -15,8 +15,6 @@
@@ -11,16 +11,18 @@ index 04245e4..871cbdf 100644
  #include "folder.h"
  #include "scheduling/syncscheduler.h"
  
-@@ -36,8 +34,6 @@ namespace TestUtils {
+@@ -35,9 +33,8 @@ namespace TestUtils {
+ }
  
  class Application;
- class SyncResult;
--class SocketApi;
+-class SyncResult;
+ class SocketApi;
 -class LockWatcher;
++class SyncResult;
  
  /**
   * @brief Return object for Folder::trayOverallStatus.
-@@ -55,7 +51,7 @@ private:
+@@ -55,7 +52,7 @@ private:
      SyncResult _overallStatus;
  };
  
@@ -29,7 +31,7 @@ index 04245e4..871cbdf 100644
  {
      Q_OBJECT
  public:
-@@ -158,7 +154,6 @@ public:
+@@ -158,7 +155,6 @@ public:
       */
      static TrayOverallStatusResult trayOverallStatus(const QVector<Folder *> &folders);
  
@@ -37,7 +39,7 @@ index 04245e4..871cbdf 100644
  
      /**
       * Check if @a path is a valid path for a new folder considering the already sync'ed items.
-@@ -212,7 +207,6 @@ public:
+@@ -212,7 +208,6 @@ public:
      void scheduleAllFolders();
      void setDirtyNetworkLimits();
  
@@ -45,7 +47,7 @@ index 04245e4..871cbdf 100644
  
  Q_SIGNALS:
      /**
-@@ -275,7 +269,6 @@ private:
+@@ -275,7 +270,6 @@ private:
      QString getBackupName(QString fullPathName) const;
  
      // makes the folder known to the socket api
@@ -53,7 +55,7 @@ index 04245e4..871cbdf 100644
  
      QVector<Folder *> _folders;
      QString _folderConfigPath;
-@@ -284,12 +277,10 @@ private:
+@@ -284,12 +278,13 @@ private:
      QSet<QString> _additionalBlockedFolderAliases;
  
      /// Watches files that couldn't be synced due to locks
@@ -61,8 +63,11 @@ index 04245e4..871cbdf 100644
  
      /// Scheduled folders that should be synced as soon as possible
      SyncScheduler *_scheduler;
- 
--    std::unique_ptr<SocketApi> _socketApi;
+-
++#ifdef Q_OS_LINUX
+     std::unique_ptr<SocketApi> _socketApi;
++#endif
++
  
      mutable QMap<QString, Result<void, QString>> _unsupportedConfigurationError;
  

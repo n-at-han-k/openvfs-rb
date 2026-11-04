@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The socket api, which is how a placeholder gets filled: the fuse layer is its own process, so when something opens a dehydrated file it asks over a unix socket for the content and blocks until the client has fetched it. Without it the fuse layer cannot connect and exits, so every folder stayed on `Off`. Windows needs no such channel, the Cloud Filter API calling into the client process instead, and it is trimmed to the two messages the fuse layer sends -- `VERSION` and `V2/HYDRATE_FILE` -- which leaves the file manager's context menu, overlays and share links out.
+
 ## [1.4.0] - 2026-11-04
 
 ### Added

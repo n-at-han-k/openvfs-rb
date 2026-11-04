@@ -1,0 +1,45 @@
+diff --git a/src/gui/guiutility.h b/src/gui/guiutility.h
+index a6e7939..9cc86d1 100644
+--- a/src/gui/guiutility.h
++++ b/src/gui/guiutility.h
+@@ -14,14 +14,8 @@
+ 
+ #pragma once
+ 
+-#include "gui/opencloudguilib.h"
+-
+-#include "common/pinstate.h"
+-
+ #include <QLoggingCategory>
+ #include <QString>
+-#include <QUrl>
+-#include <QWidget>
+ 
+ namespace OCC {
+ 
+@@ -29,25 +23,6 @@ Q_DECLARE_LOGGING_CATEGORY(lcGuiUtility)
+ 
+ namespace Utility {
+ 
+-    /** Open a URL in the browser.
+-     *
+-     * If launching the browser fails, display a message.
+-     */
+-    bool openBrowser(const QUrl &url, QWidget *errorWidgetParent);
+-
+-    /** Start composing a new email message.
+-     *
+-     * If launching the email program fails, display a message.
+-     */
+-    bool openEmailComposer(const QString &subject, const QString &body,
+-        QWidget *errorWidgetParent);
+-
+-    /** Translated text for "making items always available locally" */
+-    QString vfsPinActionText();
+-
+-    /** Translated text for "free up local space" (and unpinning the item) */
+-    QString vfsFreeSpaceActionText();
+-
+     void startShellIntegration();
+ 
+     QString socketApiSocketPath();

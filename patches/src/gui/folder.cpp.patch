@@ -1,8 +1,8 @@
 diff --git a/src/gui/folder.cpp b/src/gui/folder.cpp
-index 3e512df..fdb4551 100644
+index 3e512df..d03916e 100644
 --- a/src/gui/folder.cpp
 +++ b/src/gui/folder.cpp
-@@ -18,7 +18,6 @@
+@@ -18,37 +18,31 @@
  
  #include "account.h"
  #include "accountstate.h"
@@ -10,9 +10,12 @@ index 3e512df..fdb4551 100644
  #include "common/filesystembase.h"
  #include "common/syncjournalfilerecord.h"
  #include "common/version.h"
-@@ -26,29 +25,21 @@
+ #include "configfile.h"
  #include "filesystem.h"
  #include "folderman.h"
++#ifdef Q_OS_LINUX
++#include "guiutility.h"
++#endif
  #include "folderwatcher.h"
 -#include "gui/accountsettings.h"
  #include "gui/folderdefinition.h"
@@ -41,7 +44,7 @@ index 3e512df..fdb4551 100644
  #include <QDir>
  #include <QSettings>
  #include <QTimer>
-@@ -130,12 +121,6 @@ Folder::Folder(const FolderDefinition &definition, const AccountStatePtr &accoun
+@@ -130,12 +124,6 @@ Folder::Folder(const FolderDefinition &definition, const AccountStatePtr &accoun
          connect(_engine.data(), &SyncEngine::itemCompleted,
              _localDiscoveryTracker.data(), &LocalDiscoveryTracker::slotItemCompleted);
  
@@ -54,7 +57,7 @@ index 3e512df..fdb4551 100644
  
          // Initialize the vfs plugin. Do this after the UI is running, so we can show a dialog when something goes wrong.
          QTimer::singleShot(0, this, &Folder::startVfs);
-@@ -167,11 +152,6 @@ Result<void, QString> Folder::checkPathLength(const QString &path)
+@@ -167,11 +155,6 @@ Result<void, QString> Folder::checkPathLength(const QString &path)
      return {};
  }
  
@@ -66,7 +69,7 @@ index 3e512df..fdb4551 100644
  QUrl Folder::webUrl() const
  {
      return _webUrl;
-@@ -255,65 +235,17 @@ void Folder::setIsReady(bool b)
+@@ -255,65 +238,17 @@ void Folder::setIsReady(bool b)
  
  void Folder::prepareFolder(const QString &path, const QString &displayName, const QString &description, bool override)
  {
@@ -135,7 +138,7 @@ index 3e512df..fdb4551 100644
      return _definition.displayName();
  }
  
-@@ -374,9 +306,6 @@ QUrl Folder::webDavUrl() const
+@@ -374,9 +309,6 @@ QUrl Folder::webDavUrl() const
  {
      const QString spaceId = _definition.spaceId();
      if (!spaceId.isEmpty()) {
@@ -145,7 +148,7 @@ index 3e512df..fdb4551 100644
      }
      return _definition.webDavUrl();
  }
-@@ -535,7 +464,7 @@ void Folder::createGuiLog(const QString &filename, LogStatus status, int count,
+@@ -535,7 +467,7 @@ void Folder::createGuiLog(const QString &filename, LogStatus status, int count,
          }
  
          if (!text.isEmpty()) {
@@ -154,7 +157,7 @@ index 3e512df..fdb4551 100644
          }
      }
  }
-@@ -547,10 +476,9 @@ void Folder::startVfs()
+@@ -547,10 +479,12 @@ void Folder::startVfs()
  
      VfsSetupParams vfsParams(_accountState->account(), webDavUrl(), _definition.spaceId(), displayName(), _engine.get());
      vfsParams.journal = &_journal;
@@ -163,11 +166,13 @@ index 3e512df..fdb4551 100644
 +    vfsParams.providerDisplayName = QCoreApplication::applicationName();
 +    vfsParams.providerName = QCoreApplication::applicationName();
      vfsParams.providerVersion = Version::version();
--    vfsParams.socketPath = Utility::socketApiSocketPath();
++#ifdef Q_OS_LINUX
+     vfsParams.socketPath = Utility::socketApiSocketPath();
++#endif
  
      connect(&_engine->syncFileStatusTracker(), &SyncFileStatusTracker::fileStatusChanged,
          _vfs.data(), &Vfs::fileStatusChanged);
-@@ -799,8 +727,6 @@ void Folder::wipeForRemoval()
+@@ -799,8 +733,6 @@ void Folder::wipeForRemoval()
      // Delete files that have been partially downloaded.
      slotDiscardDownloadProgress();
  
@@ -176,7 +181,7 @@ index 3e512df..fdb4551 100644
      _journal.close(); // close the sync journal
  
      // Remove db and temporaries
-@@ -895,7 +821,7 @@ void Folder::startSync()
+@@ -895,7 +827,7 @@ void Folder::startSync()
      _syncResult.reset();
      setSyncState(SyncResult::SyncRunning);
  
@@ -185,7 +190,7 @@ index 3e512df..fdb4551 100644
  
      setDirtyNetworkLimits();
  
-@@ -965,7 +891,7 @@ void Folder::slotSyncFinished(bool success)
+@@ -965,7 +897,7 @@ void Folder::slotSyncFinished(bool success)
          // probably removing the folder
          return;
      }
@@ -194,7 +199,7 @@ index 3e512df..fdb4551 100644
  
      bool syncError = !_syncResult.errorStrings().isEmpty();
      if (syncError) {
-@@ -1099,27 +1025,13 @@ void Folder::warnOnNewExcludedItem(const SyncJournalFileRecord &record, QStringV
+@@ -1099,27 +1031,13 @@ void Folder::warnOnNewExcludedItem(const SyncJournalFileRecord &record, QStringV
                                              "It will not be synchronized.")
                                               .arg(fi.filePath());
  

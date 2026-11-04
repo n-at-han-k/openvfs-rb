@@ -1,17 +1,21 @@
 diff --git a/src/gui/folderman.cpp b/src/gui/folderman.cpp
-index 9b03bab..e4f5738 100644
+index 9b03bab..dac8918 100644
 --- a/src/gui/folderman.cpp
 +++ b/src/gui/folderman.cpp
-@@ -14,6 +14,8 @@
+@@ -14,6 +14,12 @@
  
  #include "folderman.h"
  
++#ifdef Q_OS_LINUX
++#include "socketapi/socketapi.h"
++#endif
++
 +#include <QCoreApplication>
 +
  #include "account.h"
  #include "accountmanager.h"
  #include "accountstate.h"
-@@ -22,20 +24,14 @@
+@@ -22,20 +28,14 @@
  #include "gui/folder.h"
  #include "gui/folderdefinition.h"
  #include "gui/networkinformation.h"
@@ -32,14 +36,16 @@ index 9b03bab..e4f5738 100644
  #include <QtCore>
  
  using namespace Qt::Literals::StringLiterals;
-@@ -88,40 +84,17 @@ const SyncResult &TrayOverallStatusResult::overallStatus() const
+@@ -88,40 +88,25 @@ const SyncResult &TrayOverallStatusResult::overallStatus() const
  FolderMan *FolderMan::_instance = nullptr;
  
  FolderMan::FolderMan()
 -    : _lockWatcher(new LockWatcher)
 -    , _scheduler(new SyncScheduler(this))
--    , _socketApi(new SocketApi)
 +    : _scheduler(new SyncScheduler(this))
++#ifdef Q_OS_LINUX
+     , _socketApi(new SocketApi)
++#endif
  {
 -#ifdef Q_OS_WIN
 -    auto updateSyncRoots = [] {
@@ -56,7 +62,11 @@ index 9b03bab..e4f5738 100644
 -    };
 -    updateSyncRoots();
 -    connect(AccountManager::instance(), &AccountManager::accountAdded, this, updateSyncRoots);
--#endif
++#ifdef Q_OS_LINUX
++    // Nothing else connects to this socket: it is where the openvfs fuse layer
++    // asks for a placeholder to be filled.
++    _socketApi->startShellIntegration();
+ #endif
 -    connect(AccountManager::instance(), &AccountManager::accountRemoved,
 -        this, &FolderMan::slotRemoveFoldersForAccount);
 -
@@ -79,7 +89,7 @@ index 9b03bab..e4f5738 100644
      return _instance;
  }
  
-@@ -142,16 +115,12 @@ void FolderMan::unloadFolder(Folder *f)
+@@ -142,16 +127,12 @@ void FolderMan::unloadFolder(Folder *f)
      Q_ASSERT(f);
  
      _folders.removeAll(f);
@@ -96,7 +106,7 @@ index 9b03bab..e4f5738 100644
      }
  }
  
-@@ -169,17 +138,6 @@ void FolderMan::unloadAndDeleteAllFolders()
+@@ -169,17 +150,6 @@ void FolderMan::unloadAndDeleteAllFolders()
      }
  }
  
@@ -114,7 +124,7 @@ index 9b03bab..e4f5738 100644
  
  std::optional<qsizetype> FolderMan::loadFolders()
  {
-@@ -235,34 +193,20 @@ void FolderMan::saveFolders()
+@@ -235,34 +205,20 @@ void FolderMan::saveFolders()
  bool FolderMan::ensureJournalGone(const QString &journalDbFile)
  {
      // remove the old journal file
@@ -151,7 +161,7 @@ index 9b03bab..e4f5738 100644
      }
  }
  
-@@ -277,7 +221,6 @@ void FolderMan::scheduleAllFolders()
+@@ -277,7 +233,6 @@ void FolderMan::scheduleAllFolders()
  
  void FolderMan::slotSyncOnceFileUnlocks(const QString &path, FileSystem::LockMode mode)
  {
@@ -159,7 +169,7 @@ index 9b03bab..e4f5738 100644
  }
  
  void FolderMan::slotIsConnectedChanged()
-@@ -402,13 +345,9 @@ Folder *FolderMan::addFolderInternal(
+@@ -402,13 +357,9 @@ Folder *FolderMan::addFolderInternal(
  
      // See matching disconnects in unloadFolder().
      if (!folder->hasSetupError()) {
@@ -173,7 +183,7 @@ index 9b03bab..e4f5738 100644
      }
      return folder;
  }
-@@ -531,7 +470,7 @@ static QString checkPathForSyncRootMarkingRecursive(const QString &path, FolderM
+@@ -531,7 +482,7 @@ static QString checkPathForSyncRootMarkingRecursive(const QString &path, FolderM
  {
      std::pair<QString, QUuid> existingTags = Utility::getDirectorySyncRootMarkings(path);
      if (!existingTags.first.isEmpty()) {
@@ -182,7 +192,7 @@ index 9b03bab..e4f5738 100644
              // another application uses this as spaces root folder
              return FolderMan::tr("The folder »%1« is already in use by application %2!").arg(path, existingTags.first);
          }
-@@ -700,12 +639,6 @@ void FolderMan::setIgnoreHiddenFiles(bool ignore)
+@@ -700,12 +651,6 @@ void FolderMan::setIgnoreHiddenFiles(bool ignore)
      saveFolders();
  }
  
@@ -195,7 +205,7 @@ index 9b03bab..e4f5738 100644
  void FolderMan::slotReloadSyncOptions()
  {
      for (auto *f : std::as_const(_folders)) {
-@@ -751,7 +684,7 @@ Folder *FolderMan::addFolderFromFolderWizardResult(const AccountStatePtr &accoun
+@@ -751,7 +696,7 @@ Folder *FolderMan::addFolderFromFolderWizardResult(const AccountStatePtr &accoun
  
  QString FolderMan::suggestSyncFolder(NewFolderType folderType, const QUuid &accountUuid)
  {
