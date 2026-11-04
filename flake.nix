@@ -118,7 +118,11 @@
             # library on its own leaves the plugin with nothing to run. Named
             # openvfs, which is this target's OUTPUT_NAME upstream.
             mkdir -p "$out/bin" "$out/etc/openvfs"
+            # Both defines are openvfsfuse's own CMakeLists': with macFUSE's
+            # darwin extensions on, its operations take fuse_darwin_attr and a
+            # statfs where this code passes stat and statvfs.
             $CXX -std=c++23 -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=30 \
+              -DFUSE_DARWIN_ENABLE_EXTENSIONS=0 \
               -I"$src/src" -Igenerated -I"${pkgs.nlohmann_json}/include" \
               $(pkg-config --cflags fuse3) \
               "$src/src/openvfsfuse/main.cpp" "$src/src/openvfsfuse/openvfsfuse.cpp" \
