@@ -11,12 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- A virtual filesystem on every platform opencloud-desktop has one for: `cfapi` on windows, `openvfs` elsewhere. Only `vfs/off` was compiled before, so `bestAvailableVfsMode` could return nothing else and every folder downloaded the whole server. cfapi needs the Cloud Filter API, which the Windows SDK has and mingw-w64 does not, so it is built when the toolchain can and windows is left on `Off` when it cannot.
+- A virtual filesystem on every platform opencloud-desktop has one for: `cfapi` on windows, `openvfs` elsewhere. Only `vfs/off` was compiled before, so `bestAvailableVfsMode` could return nothing else and every folder downloaded the whole server. cfapi needs the Cloud Filter API and the WinRT storage provider api, which come from the Windows SDK and msys2's cppwinrt rather than from mingw-w64 itself, so the build asks for both and leaves windows on `Off` if a toolchain has neither.
 - The socket api, which is how a placeholder gets filled under openvfs: the fuse layer is its own process, so when something opens a dehydrated file it asks over a socket and blocks until the client has fetched the content. Nothing listened and nothing set `socketPath`, so the fuse layer could not connect and exited. Windows needs no such channel, hydrating through the Cloud Filter API's own callbacks instead. It is trimmed to the two messages the fuse layer sends -- `VERSION` and `V2/HYDRATE_FILE` -- which leaves out the file manager's context menu, overlays and share links, and with them the widgets and the branding.
-
-### Added
-
-- The socket api, which is how a placeholder gets filled: the fuse layer is its own process, so when something opens a dehydrated file it asks over a unix socket for the content and blocks until the client has fetched it. Without it the fuse layer cannot connect and exits, so every folder stayed on `Off`. Windows needs no such channel, the Cloud Filter API calling into the client process instead, and it is trimmed to the two messages the fuse layer sends -- `VERSION` and `V2/HYDRATE_FILE` -- which leaves the file manager's context menu, overlays and share links out.
 
 ## [1.4.0] - 2026-11-04
 
