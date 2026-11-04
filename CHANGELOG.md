@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-11-04
+
 ### Added
 
 - A virtual filesystem on every platform opencloud-desktop has one for: `cfapi` on windows, `openvfs` elsewhere. Only `vfs/off` was compiled before, so `bestAvailableVfsMode` could return nothing else and every folder downloaded the whole server. cfapi needs the Cloud Filter API, which the Windows SDK has and mingw-w64 does not, so it is built when the toolchain can and windows is left on `Off` when it cannot.
