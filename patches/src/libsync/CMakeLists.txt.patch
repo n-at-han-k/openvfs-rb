@@ -1,8 +1,8 @@
 diff --git a/src/libsync/CMakeLists.txt b/src/libsync/CMakeLists.txt
-index 3156120..9588a60 100644
+index 3156120..1481b5d 100644
 --- a/src/libsync/CMakeLists.txt
 +++ b/src/libsync/CMakeLists.txt
-@@ -1,186 +1,294 @@
+@@ -1,186 +1,307 @@
 -find_package(LibreGraphAPI 1.0.8 REQUIRED)
 -set_package_properties(LibreGraphAPI PROPERTIES
 -        URL https://github.com/opencloud-eu/libre-graph-api-cpp-qt-client
@@ -72,11 +72,10 @@ index 3156120..9588a60 100644
 -)
 +include(GNUInstallDirs)
 +include(GenerateExportHeader)
- 
++
 +find_package(SQLite3 REQUIRED)
 +find_package(Qt6Keychain REQUIRED)
  
--set_source_files_properties(accessmanager.cpp PROPERTIES COMPILE_DEFINITIONS WITH_HTTP2=$<BOOL:${WITH_HTTP2}>)
 +set(CMAKE_CXX_STANDARD 23)
 +set(CMAKE_CXX_STANDARD_REQUIRED ON)
 +set(CMAKE_AUTOMOC ON)
@@ -87,7 +86,8 @@ index 3156120..9588a60 100644
 +    "${CMAKE_BINARY_DIR}/generated/version.cpp"
 +    @ONLY
 +)
-+
+ 
+-set_source_files_properties(accessmanager.cpp PROPERTIES COMPILE_DEFINITIONS WITH_HTTP2=$<BOOL:${WITH_HTTP2}>)
 +add_library(opencloud-upload STATIC
 +    ${CMAKE_SOURCE_DIR}/src/libsync/abstractnetworkjob.cpp
 +    ${CMAKE_SOURCE_DIR}/src/libsync/accessmanager.cpp
@@ -245,13 +245,7 @@ index 3156120..9588a60 100644
 +    QT_NO_FOREACH
 +    QT_DISABLE_DEPRECATED_BEFORE=0x060200
 +    QT_NO_CONTEXTLESS_CONNECT
- )
--
--ecm_finalize_qml_module(libsync DESTINATION ${KDE_INSTALL_QMLDIR})
--
--set_source_files_properties(configfile.cpp
--    PROPERTIES
--        COMPILE_DEFINITIONS EXCLUDE_FILE_NAME="${EXCLUDE_FILE_NAME}"
++)
 +target_compile_definitions(opencloud-upload PUBLIC
 +    OPENCLOUD_SYNC_EXCLUDE_FILE="${CMAKE_INSTALL_FULL_DATADIR}/opencloud-upload/sync-exclude.lst"
 +)
@@ -278,9 +272,7 @@ index 3156120..9588a60 100644
 +    ZLIB::ZLIB
  )
  
--target_link_libraries(libsync PUBLIC $<BUILD_INTERFACE:OpenAPI::LibreGraphAPI>)
--add_subdirectory(graphapi)
--add_subdirectory(vfs)
+-ecm_finalize_qml_module(libsync DESTINATION ${KDE_INSTALL_QMLDIR})
 +# The vfs plugins, built in rather than loaded, and one platform's socket api
 +# so a plugin can be asked for the content of a placeholder. Windows hydrates
 +# through the Cloud Filter API's own callbacks, so only openvfs needs the fuse
@@ -288,34 +280,55 @@ index 3156120..9588a60 100644
 +set(OPENCLOUD_UPLOAD_PC_OPENVFS_LIBS "")
 +target_sources(opencloud-upload PRIVATE ${CMAKE_SOURCE_DIR}/src/gui/socketapi/socketapi.cpp)
  
+-set_source_files_properties(configfile.cpp
+-    PROPERTIES
+-        COMPILE_DEFINITIONS EXCLUDE_FILE_NAME="${EXCLUDE_FILE_NAME}"
+-)
++if(WIN32)
++    target_sources(opencloud-upload PRIVATE ${CMAKE_SOURCE_DIR}/src/gui/guiutility_win.cpp)
+ 
+-target_link_libraries(libsync PUBLIC $<BUILD_INTERFACE:OpenAPI::LibreGraphAPI>)
+-add_subdirectory(graphapi)
+-add_subdirectory(vfs)
++    # The Cloud Filter API ships with the Windows SDK, and mingw-w64 carries
++    # neither cfapi.h nor an import library for cldapi, so ask rather than
++    # assume: with MSVC cfapi is built, with mingw windows is left on Off.
++    include(CheckIncludeFileCXX)
++    check_include_file_cxx(cfapi.h HAVE_CFAPI_H)
++    find_library(CLDAPI_LIBRARY NAMES cldapi)
+ 
 -if ( APPLE )
 -    target_link_libraries(libsync PUBLIC
 -         /System/Library/Frameworks/CoreServices.framework
 -         /System/Library/Frameworks/Foundation.framework
 -         /System/Library/Frameworks/AppKit.framework
 -         /System/Library/Frameworks/IOKit.framework
-+if(WIN32)
-+    target_sources(opencloud-upload PRIVATE
-+        ${CMAKE_SOURCE_DIR}/src/plugins/vfs/cfapi/cfapiwrapper.cpp
-+        ${CMAKE_SOURCE_DIR}/src/plugins/vfs/cfapi/hydrationdevice.cpp
-+        ${CMAKE_SOURCE_DIR}/src/plugins/vfs/cfapi/vfs_cfapi.cpp
-+        ${CMAKE_SOURCE_DIR}/src/gui/guiutility_win.cpp
-     )
+-    )
 -endif()
-+    target_link_libraries(opencloud-upload PUBLIC cldapi windowsapp)
++    if(HAVE_CFAPI_H AND CLDAPI_LIBRARY)
++        target_sources(opencloud-upload PRIVATE
++            ${CMAKE_SOURCE_DIR}/src/plugins/vfs/cfapi/cfapiwrapper.cpp
++            ${CMAKE_SOURCE_DIR}/src/plugins/vfs/cfapi/hydrationdevice.cpp
++            ${CMAKE_SOURCE_DIR}/src/plugins/vfs/cfapi/vfs_cfapi.cpp
++        )
++        target_link_libraries(opencloud-upload PUBLIC ${CLDAPI_LIBRARY} windowsapp)
++        target_compile_definitions(opencloud-upload PUBLIC OPENCLOUD_HAVE_CFAPI)
++    else()
++        message(WARNING "No Cloud Filter API in this toolchain: building without the cfapi virtual filesystem")
++    endif()
 +else()
 +    find_library(OPENVFS_LIBRARY NAMES openvfs REQUIRED)
 +    find_path(OPENVFS_INCLUDE_DIR NAMES openvfs/openvfs.h REQUIRED)
 +    find_program(OPENVFS_EXECUTABLE NAMES openvfs REQUIRED)
- 
--if(Inotify_FOUND)
--    target_include_directories(libsync PRIVATE ${Inotify_INCLUDE_DIRS})
--    target_link_libraries(libsync PUBLIC ${Inotify_LIBRARIES})
++
 +    target_link_libraries(opencloud-upload PUBLIC ${OPENVFS_LIBRARY})
 +    target_include_directories(opencloud-upload PUBLIC ${OPENVFS_INCLUDE_DIR})
 +    target_sources(opencloud-upload PRIVATE ${CMAKE_SOURCE_DIR}/src/plugins/vfs/openvfs/vfs_openvfs.cpp)
 +    target_compile_definitions(opencloud-upload PRIVATE OPENVFS_EXE="${OPENVFS_EXECUTABLE}")
-+
+ 
+-if(Inotify_FOUND)
+-    target_include_directories(libsync PRIVATE ${Inotify_INCLUDE_DIRS})
+-    target_link_libraries(libsync PUBLIC ${Inotify_LIBRARIES})
 +    if(APPLE)
 +        target_sources(opencloud-upload PRIVATE
 +            ${CMAKE_SOURCE_DIR}/src/gui/guiutility_mac.mm

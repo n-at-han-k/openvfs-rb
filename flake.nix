@@ -84,19 +84,16 @@
           };
         };
 
-        # macFUSE's pkg-config module is plain fuse; fuse3 is the linux one's.
-        fuseModule = if pkgs.stdenv.hostPlatform.isDarwin then "fuse" else "fuse3";
-
         openvfsLibrary = pkgs.stdenv.mkDerivation {
           pname = "openvfs";
           version = "0.1.0";
           src = openvfs;
-          # fuse and pthreads are the fuse binary's, not the library's. macFUSE
-          # ships headers and a stub to link against; the kernel extension is
-          # the user's to install.
+          # fuse3 and pthreads are the fuse binary's, not the library's. On
+          # darwin fuse3 is macFUSE's stubs, which carry the headers and
+          # something to link against; the kernel extension is the user's to
+          # install.
           nativeBuildInputs = [ pkgs.pkg-config ];
-          buildInputs = [ pkgs.nlohmann_json ]
-            ++ (if pkgs.stdenv.hostPlatform.isDarwin then [ pkgs.macfuse-stubs ] else [ pkgs.fuse3 ]);
+          buildInputs = [ pkgs.nlohmann_json pkgs.fuse3 ];
 
           meta.platforms = pkgs.lib.platforms.linux ++ pkgs.lib.platforms.darwin;
 
@@ -123,12 +120,12 @@
             mkdir -p "$out/bin" "$out/etc/openvfs"
             $CXX -std=c++23 -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=30 \
               -I"$src/src" -Igenerated -I"${pkgs.nlohmann_json}/include" \
-              $(pkg-config --cflags ${fuseModule}) \
+              $(pkg-config --cflags fuse3) \
               "$src/src/openvfsfuse/main.cpp" "$src/src/openvfsfuse/openvfsfuse.cpp" \
               "$src/src/openvfsfuse/socketthread.cpp" "$src/src/openvfsfuse/sharedmap.cpp" \
               "$src/src/openvfsfuse/strtools.cpp" \
               -L"$out/lib" -lopenvfs -Wl,-rpath,"$out/lib" \
-              $(pkg-config --libs ${fuseModule}) -lpthread \
+              $(pkg-config --libs fuse3) -lpthread \
               -o "$out/bin/openvfs"
             runHook postBuild
           '';

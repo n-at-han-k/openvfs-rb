@@ -1,5 +1,5 @@
 diff --git a/src/libsync/vfs/vfs.cpp b/src/libsync/vfs/vfs.cpp
-index 7261b2d..8f8ae39 100644
+index 7261b2d..d5e539c 100644
 --- a/src/libsync/vfs/vfs.cpp
 +++ b/src/libsync/vfs/vfs.cpp
 @@ -18,6 +18,13 @@
@@ -7,9 +7,9 @@ index 7261b2d..8f8ae39 100644
  #include "vfs.h"
  
 +#include "plugins/vfs/off/vfs_off.h"
-+#ifdef Q_OS_WIN
++#ifdef OPENCLOUD_HAVE_CFAPI
 +#include "plugins/vfs/cfapi/vfs_cfapi.h"
-+#else
++#elif !defined(Q_OS_WIN)
 +#include "plugins/vfs/openvfs/vfs_openvfs.h"
 +#endif
 +
@@ -31,11 +31,11 @@ index 7261b2d..8f8ae39 100644
 +    if (mode == Vfs::Mode::Off) {
 +        return true;
 +    }
-+#ifdef Q_OS_WIN
++#ifdef OPENCLOUD_HAVE_CFAPI
 +    if (mode == Vfs::Mode::WindowsCfApi) {
 +        return CfApiVfsPluginFactory().checkAvailability();
 +    }
-+#else
++#elif !defined(Q_OS_WIN)
 +    if (mode == Vfs::Mode::OpenVFS) {
 +        return OpenVfsPluginFactory().checkAvailability();
 +    }
@@ -50,11 +50,11 @@ index 7261b2d..8f8ae39 100644
 +    if (mode == Vfs::Mode::Off) {
 +        return std::make_unique<VfsOff>(nullptr);
 +    }
-+#ifdef Q_OS_WIN
++#ifdef OPENCLOUD_HAVE_CFAPI
 +    if (mode == Vfs::Mode::WindowsCfApi) {
 +        return std::make_unique<VfsCfApi>(nullptr);
 +    }
-+#else
++#elif !defined(Q_OS_WIN)
 +    if (mode == Vfs::Mode::OpenVFS) {
 +        return std::make_unique<OpenVFS>(nullptr);
 +    }
@@ -74,11 +74,11 @@ index 7261b2d..8f8ae39 100644
 +    if (mode == Vfs::Mode::Off) {
 +        return {};
 +    }
-+#ifdef Q_OS_WIN
++#ifdef OPENCLOUD_HAVE_CFAPI
 +    if (mode == Vfs::Mode::WindowsCfApi) {
 +        return CfApiVfsPluginFactory().prepare(canonicalPath, accountUuid);
 +    }
-+#else
++#elif !defined(Q_OS_WIN)
 +    if (mode == Vfs::Mode::OpenVFS) {
 +        return OpenVfsPluginFactory().prepare(canonicalPath, accountUuid);
      }
