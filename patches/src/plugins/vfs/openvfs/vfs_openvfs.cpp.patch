@@ -1,5 +1,5 @@
 diff --git a/src/plugins/vfs/openvfs/vfs_openvfs.cpp b/src/plugins/vfs/openvfs/vfs_openvfs.cpp
-index c869dff..193eca1 100644
+index c869dff..f0cb6bc 100644
 --- a/src/plugins/vfs/openvfs/vfs_openvfs.cpp
 +++ b/src/plugins/vfs/openvfs/vfs_openvfs.cpp
 @@ -10,7 +10,6 @@
@@ -10,7 +10,7 @@ index c869dff..193eca1 100644
  
  #include "libsync/xattr.h"
  #include "syncfileitem.h"
-@@ -18,6 +17,7 @@
+@@ -18,9 +17,11 @@
  
  #include <openvfs/openvfs.h>
  
@@ -18,7 +18,11 @@ index c869dff..193eca1 100644
  #include <QDir>
  #include <QFile>
  #include <QLoggingCategory>
-@@ -45,7 +45,7 @@ OCC::FileSystem::Path openVFSExePath()
++#include <QStandardPaths>
+ #include <QString>
+ #include <QUuid>
+ 
+@@ -45,7 +46,7 @@ OCC::FileSystem::Path openVFSExePath()
  
  QString xattrOwnerString(const QUuid &accountUuid)
  {
