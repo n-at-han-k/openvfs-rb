@@ -1,8 +1,8 @@
 diff --git a/src/libsync/CMakeLists.txt b/src/libsync/CMakeLists.txt
-index 3156120..5113372 100644
+index 3156120..9588a60 100644
 --- a/src/libsync/CMakeLists.txt
 +++ b/src/libsync/CMakeLists.txt
-@@ -1,186 +1,282 @@
+@@ -1,186 +1,294 @@
 -find_package(LibreGraphAPI 1.0.8 REQUIRED)
 -set_package_properties(LibreGraphAPI PROPERTIES
 -        URL https://github.com/opencloud-eu/libre-graph-api-cpp-qt-client
@@ -281,15 +281,12 @@ index 3156120..5113372 100644
 -target_link_libraries(libsync PUBLIC $<BUILD_INTERFACE:OpenAPI::LibreGraphAPI>)
 -add_subdirectory(graphapi)
 -add_subdirectory(vfs)
-+# The openvfs plugin, built in rather than loaded. OPENVFS_EXE is the fuse
-+# binary it spawns to mount the layer; without placeholders every file is
-+# downloaded, which is the whole reason the plugin is here. Linux only: so is
-+# fuse3, and windows has cfapi.
++# The vfs plugins, built in rather than loaded, and one platform's socket api
++# so a plugin can be asked for the content of a placeholder. Windows hydrates
++# through the Cloud Filter API's own callbacks, so only openvfs needs the fuse
++# binary that OPENVFS_EXE names.
 +set(OPENCLOUD_UPLOAD_PC_OPENVFS_LIBS "")
-+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-+    find_library(OPENVFS_LIBRARY NAMES openvfs REQUIRED)
-+    find_path(OPENVFS_INCLUDE_DIR NAMES openvfs/openvfs.h REQUIRED)
-+    find_program(OPENVFS_EXECUTABLE NAMES openvfs REQUIRED)
++target_sources(opencloud-upload PRIVATE ${CMAKE_SOURCE_DIR}/src/gui/socketapi/socketapi.cpp)
  
 -if ( APPLE )
 -    target_link_libraries(libsync PUBLIC
@@ -297,22 +294,37 @@ index 3156120..5113372 100644
 -         /System/Library/Frameworks/Foundation.framework
 -         /System/Library/Frameworks/AppKit.framework
 -         /System/Library/Frameworks/IOKit.framework
-+    target_link_libraries(opencloud-upload PUBLIC ${OPENVFS_LIBRARY})
-+    target_include_directories(opencloud-upload PUBLIC ${OPENVFS_INCLUDE_DIR})
-+    # The socket api is the plugin's hydration channel: the fuse layer asks over
-+    # it for the content of a placeholder somebody opened. Trimmed to that, the
-+    # file manager's context menu having been the rest of it.
++if(WIN32)
 +    target_sources(opencloud-upload PRIVATE
-+        ${CMAKE_SOURCE_DIR}/src/plugins/vfs/openvfs/vfs_openvfs.cpp
-+        ${CMAKE_SOURCE_DIR}/src/gui/socketapi/socketapi.cpp
-+        ${CMAKE_SOURCE_DIR}/src/gui/guiutility_unix.cpp
++        ${CMAKE_SOURCE_DIR}/src/plugins/vfs/cfapi/cfapiwrapper.cpp
++        ${CMAKE_SOURCE_DIR}/src/plugins/vfs/cfapi/hydrationdevice.cpp
++        ${CMAKE_SOURCE_DIR}/src/plugins/vfs/cfapi/vfs_cfapi.cpp
++        ${CMAKE_SOURCE_DIR}/src/gui/guiutility_win.cpp
      )
 -endif()
-+    target_compile_definitions(opencloud-upload PRIVATE OPENVFS_EXE="${OPENVFS_EXECUTABLE}")
++    target_link_libraries(opencloud-upload PUBLIC cldapi windowsapp)
++else()
++    find_library(OPENVFS_LIBRARY NAMES openvfs REQUIRED)
++    find_path(OPENVFS_INCLUDE_DIR NAMES openvfs/openvfs.h REQUIRED)
++    find_program(OPENVFS_EXECUTABLE NAMES openvfs REQUIRED)
  
 -if(Inotify_FOUND)
 -    target_include_directories(libsync PRIVATE ${Inotify_INCLUDE_DIRS})
 -    target_link_libraries(libsync PUBLIC ${Inotify_LIBRARIES})
++    target_link_libraries(opencloud-upload PUBLIC ${OPENVFS_LIBRARY})
++    target_include_directories(opencloud-upload PUBLIC ${OPENVFS_INCLUDE_DIR})
++    target_sources(opencloud-upload PRIVATE ${CMAKE_SOURCE_DIR}/src/plugins/vfs/openvfs/vfs_openvfs.cpp)
++    target_compile_definitions(opencloud-upload PRIVATE OPENVFS_EXE="${OPENVFS_EXECUTABLE}")
++
++    if(APPLE)
++        target_sources(opencloud-upload PRIVATE
++            ${CMAKE_SOURCE_DIR}/src/gui/guiutility_mac.mm
++            ${CMAKE_SOURCE_DIR}/src/gui/socketapi/socketapisocket_mac.mm
++        )
++    else()
++        target_sources(opencloud-upload PRIVATE ${CMAKE_SOURCE_DIR}/src/gui/guiutility_unix.cpp)
++    endif()
++
 +    # opencloud-upload is static, so the extension links openvfs itself.
 +    get_filename_component(_openvfs_libdir "${OPENVFS_LIBRARY}" DIRECTORY)
 +    set(OPENCLOUD_UPLOAD_PC_OPENVFS_LIBS " -L${_openvfs_libdir} -lopenvfs")

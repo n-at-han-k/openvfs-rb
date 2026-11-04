@@ -1,5 +1,5 @@
 diff --git a/src/gui/folderman.h b/src/gui/folderman.h
-index 04245e4..90688dc 100644
+index 04245e4..0487265 100644
 --- a/src/gui/folderman.h
 +++ b/src/gui/folderman.h
 @@ -15,8 +15,6 @@
@@ -55,7 +55,7 @@ index 04245e4..90688dc 100644
  
      QVector<Folder *> _folders;
      QString _folderConfigPath;
-@@ -284,12 +278,13 @@ private:
+@@ -284,13 +278,12 @@ private:
      QSet<QString> _additionalBlockedFolderAliases;
  
      /// Watches files that couldn't be synced due to locks
@@ -64,10 +64,9 @@ index 04245e4..90688dc 100644
      /// Scheduled folders that should be synced as soon as possible
      SyncScheduler *_scheduler;
 -
-+#ifdef Q_OS_LINUX
      std::unique_ptr<SocketApi> _socketApi;
-+#endif
-+
  
++
      mutable QMap<QString, Result<void, QString>> _unsupportedConfigurationError;
  
+     static FolderMan *_instance;

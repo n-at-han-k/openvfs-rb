@@ -1,20 +1,22 @@
 diff --git a/src/libsync/vfs/vfs.cpp b/src/libsync/vfs/vfs.cpp
-index 7261b2d..be93f71 100644
+index 7261b2d..8f8ae39 100644
 --- a/src/libsync/vfs/vfs.cpp
 +++ b/src/libsync/vfs/vfs.cpp
-@@ -18,6 +18,11 @@
+@@ -18,6 +18,13 @@
  
  #include "vfs.h"
  
 +#include "plugins/vfs/off/vfs_off.h"
-+#ifdef Q_OS_LINUX
++#ifdef Q_OS_WIN
++#include "plugins/vfs/cfapi/vfs_cfapi.h"
++#else
 +#include "plugins/vfs/openvfs/vfs_openvfs.h"
 +#endif
 +
  #include "libsync/common/filesystembase.h"
  #include "libsync/common/plugin.h"
  #include "libsync/common/syncjournaldb.h"
-@@ -25,7 +30,6 @@
+@@ -25,7 +32,6 @@
  #include "libsync/filesystem.h"
  #include "libsync/syncengine.h"
  
@@ -22,14 +24,18 @@ index 7261b2d..be93f71 100644
  #include <QCoreApplication>
  #include <QLoggingCategory>
  #include <QPluginLoader>
-@@ -129,6 +133,14 @@ OCC::VfsPluginManager *OCC::VfsPluginManager::_instance = nullptr;
+@@ -129,6 +135,18 @@ OCC::VfsPluginManager *OCC::VfsPluginManager::_instance = nullptr;
  
  bool OCC::VfsPluginManager::isVfsPluginAvailable(Vfs::Mode mode) const
  {
 +    if (mode == Vfs::Mode::Off) {
 +        return true;
 +    }
-+#ifdef Q_OS_LINUX
++#ifdef Q_OS_WIN
++    if (mode == Vfs::Mode::WindowsCfApi) {
++        return CfApiVfsPluginFactory().checkAvailability();
++    }
++#else
 +    if (mode == Vfs::Mode::OpenVFS) {
 +        return OpenVfsPluginFactory().checkAvailability();
 +    }
@@ -37,14 +43,18 @@ index 7261b2d..be93f71 100644
      return createPluginFactoryInternal(mode) != nullptr;
  }
  
-@@ -225,6 +237,15 @@ PluginFactory *VfsPluginManager::createPluginFactoryInternal(Vfs::Mode mode) con
+@@ -225,6 +243,19 @@ PluginFactory *VfsPluginManager::createPluginFactoryInternal(Vfs::Mode mode) con
  
  std::unique_ptr<Vfs> OCC::VfsPluginManager::createVfsFromPlugin(Vfs::Mode mode) const
  {
 +    if (mode == Vfs::Mode::Off) {
 +        return std::make_unique<VfsOff>(nullptr);
 +    }
-+#ifdef Q_OS_LINUX
++#ifdef Q_OS_WIN
++    if (mode == Vfs::Mode::WindowsCfApi) {
++        return std::make_unique<VfsCfApi>(nullptr);
++    }
++#else
 +    if (mode == Vfs::Mode::OpenVFS) {
 +        return std::make_unique<OpenVFS>(nullptr);
 +    }
@@ -53,22 +63,26 @@ index 7261b2d..be93f71 100644
      const auto [pluginPath, factory] = createVfsPluginFactory(mode);
      if (factory) {
          auto vfs = std::unique_ptr<Vfs>(qobject_cast<Vfs *>(factory->create(nullptr)));
-@@ -244,15 +265,24 @@ Result<void, QString> VfsPluginManager::prepare(const QString &path, const QUuid
+@@ -244,15 +275,28 @@ Result<void, QString> VfsPluginManager::prepare(const QString &path, const QUuid
      const auto canonicalPath = FileSystem::canonicalPath(path);
  #ifdef Q_OS_WIN
      if (FileSystem::fileSystemForPath(canonicalPath).startsWith("ReFS"_L1, Qt::CaseInsensitive)) {
 -        return QApplication::translate("VfsPluginManager", "ReFS is currently not supported.");
 +        return QCoreApplication::translate("VfsPluginManager", "ReFS is currently not supported.");
-     }
- #endif
++    }
++#endif
 +    if (mode == Vfs::Mode::Off) {
 +        return {};
 +    }
-+#ifdef Q_OS_LINUX
++#ifdef Q_OS_WIN
++    if (mode == Vfs::Mode::WindowsCfApi) {
++        return CfApiVfsPluginFactory().prepare(canonicalPath, accountUuid);
++    }
++#else
 +    if (mode == Vfs::Mode::OpenVFS) {
 +        return OpenVfsPluginFactory().prepare(canonicalPath, accountUuid);
-+    }
-+#endif
+     }
+ #endif
 +
      const auto [pluginPath, factory] = createVfsPluginFactory(mode);
      if (factory) {
