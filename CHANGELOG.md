@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-11-04
+
 ### Changed
 
 - An uploaded file is marked online-only, so the engine dehydrates it as soon as it can: the server has the content, and a sync which keeps a local copy of everything sent is the thing files-on-demand is for not doing. Upstream clears the pin at that point instead, on the grounds that a file added locally should stay local. Opening one hydrates it and the engine sets it `Unspecified`, so a file in use stops being dropped.
