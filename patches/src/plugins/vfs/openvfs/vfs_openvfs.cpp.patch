@@ -1,0 +1,29 @@
+diff --git a/src/plugins/vfs/openvfs/vfs_openvfs.cpp b/src/plugins/vfs/openvfs/vfs_openvfs.cpp
+index c869dff..193eca1 100644
+--- a/src/plugins/vfs/openvfs/vfs_openvfs.cpp
++++ b/src/plugins/vfs/openvfs/vfs_openvfs.cpp
+@@ -10,7 +10,6 @@
+ #include "common/chronoelapsedtimer.h"
+ #include "common/syncjournaldb.h"
+ #include "filesystem.h"
+-#include "resources/jsontheme.h"
+ 
+ #include "libsync/xattr.h"
+ #include "syncfileitem.h"
+@@ -18,6 +17,7 @@
+ 
+ #include <openvfs/openvfs.h>
+ 
++#include <QCoreApplication>
+ #include <QDir>
+ #include <QFile>
+ #include <QLoggingCategory>
+@@ -45,7 +45,7 @@ OCC::FileSystem::Path openVFSExePath()
+ 
+ QString xattrOwnerString(const QUuid &accountUuid)
+ {
+-    return u"%1:%2"_s.arg(OCC::Resources::JsonTheme::instance().applicationName(), accountUuid.toString(QUuid::WithoutBraces));
++    return u"%1:%2"_s.arg(QCoreApplication::applicationName(), accountUuid.toString(QUuid::WithoutBraces));
+ }
+ 
+ OCC::FileSystem::Path openVFSConfigFilePath()
