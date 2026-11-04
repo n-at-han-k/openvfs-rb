@@ -1,8 +1,8 @@
 diff --git a/src/libsync/CMakeLists.txt b/src/libsync/CMakeLists.txt
-index 3156120..3edfb2f 100644
+index 3156120..8f421be 100644
 --- a/src/libsync/CMakeLists.txt
 +++ b/src/libsync/CMakeLists.txt
-@@ -1,186 +1,349 @@
+@@ -1,186 +1,354 @@
 -find_package(LibreGraphAPI 1.0.8 REQUIRED)
 -set_package_properties(LibreGraphAPI PROPERTIES
 -        URL https://github.com/opencloud-eu/libre-graph-api-cpp-qt-client
@@ -285,7 +285,7 @@ index 3156120..3edfb2f 100644
 +# so a plugin can be asked for the content of a placeholder. Windows hydrates
 +# through the Cloud Filter API's own callbacks, so only openvfs needs the fuse
 +# binary that OPENVFS_EXE names.
-+set(OPENCLOUD_UPLOAD_PC_OPENVFS_LIBS "")
++set(OPENCLOUD_UPLOAD_PC_VFS_LIBS "")
 +target_sources(opencloud-upload PRIVATE ${CMAKE_SOURCE_DIR}/src/gui/socketapi/socketapi.cpp)
  
 -if ( APPLE )
@@ -373,6 +373,14 @@ index 3156120..3edfb2f 100644
 +        target_include_directories(opencloud-upload PUBLIC ${CMAKE_BINARY_DIR}/cfapi-include)
 +        target_link_libraries(opencloud-upload PUBLIC ${CLDAPI_LIBRARY} windowsapp)
 +        target_compile_definitions(opencloud-upload PUBLIC OPENCLOUD_HAVE_CFAPI)
+ 
+-if(WITH_CRASHREPORTER)
+-    set_source_files_properties(platform.cpp PROPERTIES COMPILE_DEFINITIONS CRASHREPORTER_EXECUTABLE="${CRASHREPORTER_EXECUTABLE}")
+-    target_link_libraries(libsync PRIVATE CrashReporterQt::Handler)
++        # opencloud-upload is a static archive, so the extension does its own
++        # linking from the .pc file: cldapi for the Cloud Filter API and
++        # windowsapp for the WinRT activation the registration goes through.
++        set(OPENCLOUD_UPLOAD_PC_VFS_LIBS " -lcldapi -lwindowsapp")
 +    else()
 +        message(WARNING "No Cloud Filter API found: building without the cfapi virtual filesystem")
 +    endif()
@@ -380,10 +388,7 @@ index 3156120..3edfb2f 100644
 +    find_library(OPENVFS_LIBRARY NAMES openvfs REQUIRED)
 +    find_path(OPENVFS_INCLUDE_DIR NAMES openvfs/openvfs.h REQUIRED)
 +    find_program(OPENVFS_EXECUTABLE NAMES openvfs REQUIRED)
- 
--if(WITH_CRASHREPORTER)
--    set_source_files_properties(platform.cpp PROPERTIES COMPILE_DEFINITIONS CRASHREPORTER_EXECUTABLE="${CRASHREPORTER_EXECUTABLE}")
--    target_link_libraries(libsync PRIVATE CrashReporterQt::Handler)
++
 +    target_link_libraries(opencloud-upload PUBLIC ${OPENVFS_LIBRARY})
 +    target_include_directories(opencloud-upload PUBLIC ${OPENVFS_INCLUDE_DIR})
 +    target_sources(opencloud-upload PRIVATE ${CMAKE_SOURCE_DIR}/src/plugins/vfs/openvfs/vfs_openvfs.cpp)
@@ -403,7 +408,7 @@ index 3156120..3edfb2f 100644
 +
 +    # opencloud-upload is static, so the extension links openvfs itself.
 +    get_filename_component(_openvfs_libdir "${OPENVFS_LIBRARY}" DIRECTORY)
-+    set(OPENCLOUD_UPLOAD_PC_OPENVFS_LIBS " -L${_openvfs_libdir} -lopenvfs")
++    set(OPENCLOUD_UPLOAD_PC_VFS_LIBS " -L${_openvfs_libdir} -lopenvfs")
  endif()
  
 -target_sources(libsync PRIVATE
@@ -486,14 +491,14 @@ index 3156120..3edfb2f 100644
 +set(QTKEYCHAIN_INCLUDE_DIR "${QTKEYCHAIN_INCLUDE_DIRS}")
 +get_filename_component(_qtkeychain_prefix "${Qt6Keychain_DIR}/../../.." ABSOLUTE)
 +set(QTKEYCHAIN_LIBDIR "${_qtkeychain_prefix}/lib")
-+
+ 
+-install(TARGETS libsync EXPORT OpenCloudConfig ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
 +configure_file(
 +    "${CMAKE_SOURCE_DIR}/opencloud-upload.pc.in"
 +    "${CMAKE_BINARY_DIR}/opencloud-upload.pc"
 +    @ONLY
 +)
- 
--install(TARGETS libsync EXPORT OpenCloudConfig ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
++
 +install(TARGETS opencloud-upload ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 +install(DIRECTORY
 +    ${CMAKE_SOURCE_DIR}/src/libsync
