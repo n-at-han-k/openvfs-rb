@@ -1,0 +1,12 @@
+diff --git a/src/plugins/vfs/cfapi/cfapiwrapper.cpp b/src/plugins/vfs/cfapi/cfapiwrapper.cpp
+index 9e00927..1c40d03 100644
+--- a/src/plugins/vfs/cfapi/cfapiwrapper.cpp
++++ b/src/plugins/vfs/cfapi/cfapiwrapper.cpp
+@@ -11,7 +11,6 @@
+ #include "hydrationdevice.h"
+ #include "libsync/account.h"
+ #include "syncengine.h"
+-#include "theme.h"
+ #include "vfs_cfapi.h"
+ 
+ #include <QCoreApplication>
