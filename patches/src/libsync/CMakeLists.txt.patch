@@ -1,15 +1,18 @@
 diff --git a/src/libsync/CMakeLists.txt b/src/libsync/CMakeLists.txt
-index 3156120..d131fd0 100644
+index 3156120..302ec57 100644
 --- a/src/libsync/CMakeLists.txt
 +++ b/src/libsync/CMakeLists.txt
-@@ -1,186 +1,253 @@
+@@ -1,186 +1,267 @@
 -find_package(LibreGraphAPI 1.0.8 REQUIRED)
 -set_package_properties(LibreGraphAPI PROPERTIES
 -        URL https://github.com/opencloud-eu/libre-graph-api-cpp-qt-client
 -        DESCRIPTION "Libre Graph is a free API for cloud collaboration inspired by the MS Graph API"
 -        TYPE REQUIRED
 -)
--
++# The gem only needs the account, discovery and PUT upload subset of the desktop.
++# Upstream builds resources/libsync/gui/cmd/plugins as separate targets; this file
++# replaces that with one static library so the UI never has to be linked or built.
+ 
 -add_library(libsync SHARED
 -    account.cpp
 -    bandwidthmanager.cpp
@@ -67,75 +70,24 @@ index 3156120..d131fd0 100644
 -
 -    path.cpp
 -)
--
-+# The gem only needs the account, discovery and PUT upload subset of the desktop.
-+# Upstream builds resources/libsync/gui/cmd/plugins as separate targets; this file
-+# replaces that with one static library so the UI never has to be linked or built.
- 
--set_source_files_properties(accessmanager.cpp PROPERTIES COMPILE_DEFINITIONS WITH_HTTP2=$<BOOL:${WITH_HTTP2}>)
--
--if(WIN32)
--    target_sources(libsync PRIVATE platform_win.cpp)
--elseif(UNIX)
--    target_sources(libsync PRIVATE xattr.cpp)
--    if (APPLE)
--        target_sources(libsync PRIVATE platform_mac.mm)
--    else()
--        target_sources(libsync PRIVATE platform_unix.cpp)
--    endif()
--endif()
 +include(GNUInstallDirs)
 +include(GenerateExportHeader)
- 
--# These headers are installed for libopencloudsync to be used by 3rd party apps
--INSTALL(
--    FILES
--        ${CMAKE_CURRENT_BINARY_DIR}/opencloudsynclib.h
--        logger.h
--        accessmanager.h
--    DESTINATION ${KDE_INSTALL_INCLUDEDIR}/OpenCloud/libsync
--)
++
 +find_package(SQLite3 REQUIRED)
 +find_package(Qt6Keychain REQUIRED)
- 
--set_target_properties(libsync PROPERTIES EXPORT_NAME SyncCore)
--
--target_link_libraries(libsync
--    PUBLIC
--        OpenCloudResources
--        Qt::Core
--        Qt::Network
--        Qt::Widgets
--        Qt::QuickControls2
--
--    PRIVATE
--        Qt::Concurrent
--        ZLIB::ZLIB
--        Qt6Keychain::Qt6Keychain
--        SQLite::SQLite3
--)
++
 +set(CMAKE_CXX_STANDARD 23)
 +set(CMAKE_CXX_STANDARD_REQUIRED ON)
 +set(CMAKE_AUTOMOC ON)
  
--apply_common_target_settings(libsync)
--ecm_add_qml_module(libsync
--        URI eu.OpenCloud.libsync
--        VERSION 1.0
--        NAMESPACE OCC
--        GENERATE_PLUGIN_SOURCE
 +file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
 +configure_file(
 +    "${CMAKE_SOURCE_DIR}/src/libsync/common/version.cpp.in"
 +    "${CMAKE_BINARY_DIR}/generated/version.cpp"
 +    @ONLY
- )
++)
  
--ecm_finalize_qml_module(libsync DESTINATION ${KDE_INSTALL_QMLDIR})
--
--set_source_files_properties(configfile.cpp
--    PROPERTIES
--        COMPILE_DEFINITIONS EXCLUDE_FILE_NAME="${EXCLUDE_FILE_NAME}"
+-set_source_files_properties(accessmanager.cpp PROPERTIES COMPILE_DEFINITIONS WITH_HTTP2=$<BOOL:${WITH_HTTP2}>)
 +add_library(opencloud-upload STATIC
 +    ${CMAKE_SOURCE_DIR}/src/libsync/abstractnetworkjob.cpp
 +    ${CMAKE_SOURCE_DIR}/src/libsync/accessmanager.cpp
@@ -204,6 +156,7 @@ index 3156120..d131fd0 100644
 +    ${CMAKE_SOURCE_DIR}/src/libsync/abstractcorejob.cpp
 +    ${CMAKE_SOURCE_DIR}/src/libsync/csync.cpp
 +    ${CMAKE_SOURCE_DIR}/src/plugins/vfs/off/vfs_off.cpp
++    ${CMAKE_SOURCE_DIR}/src/plugins/vfs/openvfs/vfs_openvfs.cpp
 +    ${CMAKE_SOURCE_DIR}/src/gui/accountmanager.cpp
 +    ${CMAKE_SOURCE_DIR}/src/cmd/tokencredentials.cpp
 +    ${CMAKE_SOURCE_DIR}/src/libsync/platform.cpp
@@ -211,19 +164,17 @@ index 3156120..d131fd0 100644
 +    ${CMAKE_SOURCE_DIR}/src/libsync/creds/credentialmanager.cpp
 +    ${CMAKE_SOURCE_DIR}/src/gui/main.cpp
 +    ${CMAKE_BINARY_DIR}/generated/version.cpp
- )
++)
  
--target_link_libraries(libsync PUBLIC $<BUILD_INTERFACE:OpenAPI::LibreGraphAPI>)
--add_subdirectory(graphapi)
--add_subdirectory(vfs)
--
--if ( APPLE )
--    target_link_libraries(libsync PUBLIC
--         /System/Library/Frameworks/CoreServices.framework
--         /System/Library/Frameworks/Foundation.framework
--         /System/Library/Frameworks/AppKit.framework
--         /System/Library/Frameworks/IOKit.framework
-+if(WIN32)
+ if(WIN32)
+-    target_sources(libsync PRIVATE platform_win.cpp)
+-elseif(UNIX)
+-    target_sources(libsync PRIVATE xattr.cpp)
+-    if (APPLE)
+-        target_sources(libsync PRIVATE platform_mac.mm)
+-    else()
+-        target_sources(libsync PRIVATE platform_unix.cpp)
+-    endif()
 +    target_sources(opencloud-upload PRIVATE
 +        ${CMAKE_SOURCE_DIR}/src/gui/folderwatcher_win.cpp
 +        ${CMAKE_SOURCE_DIR}/src/libsync/platform_win.cpp
@@ -240,22 +191,49 @@ index 3156120..d131fd0 100644
 +        ${CMAKE_SOURCE_DIR}/src/gui/folderwatcher_linux.cpp
 +        ${CMAKE_SOURCE_DIR}/src/libsync/platform_unix.cpp
 +        ${CMAKE_SOURCE_DIR}/src/libsync/xattr.cpp
-     )
++    )
  endif()
  
--if(Inotify_FOUND)
--    target_include_directories(libsync PRIVATE ${Inotify_INCLUDE_DIRS})
--    target_link_libraries(libsync PUBLIC ${Inotify_LIBRARIES})
+-# These headers are installed for libopencloudsync to be used by 3rd party apps
+-INSTALL(
+-    FILES
+-        ${CMAKE_CURRENT_BINARY_DIR}/opencloudsynclib.h
+-        logger.h
+-        accessmanager.h
+-    DESTINATION ${KDE_INSTALL_INCLUDEDIR}/OpenCloud/libsync
 +set_target_properties(opencloud-upload PROPERTIES
 +    POSITION_INDEPENDENT_CODE ON
 +    CXX_VISIBILITY_PRESET hidden
 +    VISIBILITY_INLINES_HIDDEN ON
-+)
+ )
+-
+-set_target_properties(libsync PROPERTIES EXPORT_NAME SyncCore)
+-
+-target_link_libraries(libsync
+-    PUBLIC
+-        OpenCloudResources
+-        Qt::Core
+-        Qt::Network
+-        Qt::Widgets
+-        Qt::QuickControls2
+-
+-    PRIVATE
+-        Qt::Concurrent
+-        ZLIB::ZLIB
+-        Qt6Keychain::Qt6Keychain
+-        SQLite::SQLite3
 +target_compile_definitions(opencloud-upload PUBLIC
 +    OPENCLOUD_BUILT_AS_STATIC
 +    QT_NO_KEYWORDS
 +    WITH_HTTP2=1
-+)
+ )
+-
+-apply_common_target_settings(libsync)
+-ecm_add_qml_module(libsync
+-        URI eu.OpenCloud.libsync
+-        VERSION 1.0
+-        NAMESPACE OCC
+-        GENERATE_PLUGIN_SOURCE
 +target_compile_definitions(opencloud-upload PRIVATE
 +    QT_NO_CAST_TO_ASCII
 +    QT_NO_CAST_FROM_ASCII
@@ -266,10 +244,28 @@ index 3156120..d131fd0 100644
 +    QT_NO_FOREACH
 +    QT_DISABLE_DEPRECATED_BEFORE=0x060200
 +    QT_NO_CONTEXTLESS_CONNECT
-+)
+ )
+-
+-ecm_finalize_qml_module(libsync DESTINATION ${KDE_INSTALL_QMLDIR})
+-
+-set_source_files_properties(configfile.cpp
+-    PROPERTIES
+-        COMPILE_DEFINITIONS EXCLUDE_FILE_NAME="${EXCLUDE_FILE_NAME}"
 +target_compile_definitions(opencloud-upload PUBLIC
 +    OPENCLOUD_SYNC_EXCLUDE_FILE="${CMAKE_INSTALL_FULL_DATADIR}/opencloud-upload/sync-exclude.lst"
-+)
+ )
+-
+-target_link_libraries(libsync PUBLIC $<BUILD_INTERFACE:OpenAPI::LibreGraphAPI>)
+-add_subdirectory(graphapi)
+-add_subdirectory(vfs)
+-
+-if ( APPLE )
+-    target_link_libraries(libsync PUBLIC
+-         /System/Library/Frameworks/CoreServices.framework
+-         /System/Library/Frameworks/Foundation.framework
+-         /System/Library/Frameworks/AppKit.framework
+-         /System/Library/Frameworks/IOKit.framework
+-    )
 +if(MSVC)
 +    target_compile_options(opencloud-upload PRIVATE /Gy /Gw)
 +else()
@@ -293,6 +289,22 @@ index 3156120..d131fd0 100644
 +    ZLIB::ZLIB
 +)
  
+-if(Inotify_FOUND)
+-    target_include_directories(libsync PRIVATE ${Inotify_INCLUDE_DIRS})
+-    target_link_libraries(libsync PUBLIC ${Inotify_LIBRARIES})
++# The openvfs plugin, built in rather than loaded. OPENVFS_EXE is the fuse
++# binary it spawns to mount the layer; without placeholders every file is
++# downloaded, which is the whole reason the plugin is here.
++if(NOT WIN32)
++    find_library(OPENVFS_LIBRARY NAMES openvfs REQUIRED)
++    find_path(OPENVFS_INCLUDE_DIR NAMES openvfs/openvfs.h REQUIRED)
++    find_program(OPENVFS_EXECUTABLE NAMES openvfs REQUIRED)
++
++    target_link_libraries(opencloud-upload PUBLIC ${OPENVFS_LIBRARY})
++    target_include_directories(opencloud-upload PUBLIC ${OPENVFS_INCLUDE_DIR})
++    target_compile_definitions(opencloud-upload PRIVATE OPENVFS_EXE="${OPENVFS_EXECUTABLE}")
+ endif()
+ 
 -if(NO_MSG_HANDLER)
 -    target_compile_definitions(libsync PRIVATE -DNO_MSG_HANDLER=1)
 +if(APPLE)
@@ -308,12 +320,6 @@ index 3156120..d131fd0 100644
 -        EXPORT_MACRO_NAME OPENCLOUD_SYNC_EXPORT
 -        EXPORT_FILE_NAME opencloudsynclib.h
 -        STATIC_DEFINE OPENCLOUD_BUILT_AS_STATIC
--)
--
--set_target_properties(libsync PROPERTIES
--        OUTPUT_NAME "OpenCloudLibSync"
--        VERSION ${MIRALL_VERSION}
--        SOVERSION ${MIRALL_SOVERSION}
 +file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated/libsync")
 +generate_export_header(opencloud-upload
 +    EXPORT_MACRO_NAME OPENCLOUD_SYNC_EXPORT
@@ -321,15 +327,20 @@ index 3156120..d131fd0 100644
 +    STATIC_DEFINE OPENCLOUD_BUILT_AS_STATIC
  )
  
--if(WITH_CRASHREPORTER)
--    set_source_files_properties(platform.cpp PROPERTIES COMPILE_DEFINITIONS CRASHREPORTER_EXECUTABLE="${CRASHREPORTER_EXECUTABLE}")
--    target_link_libraries(libsync PRIVATE CrashReporterQt::Handler)
+-set_target_properties(libsync PROPERTIES
+-        OUTPUT_NAME "OpenCloudLibSync"
+-        VERSION ${MIRALL_VERSION}
+-        SOVERSION ${MIRALL_SOVERSION}
+-)
 +# src/gui headers include "gui/opencloudguilib.h"; upstream generates it from the
 +# OpenCloudGui target, which this build does not have. Alias it onto our own macro.
 +file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated/gui")
 +file(WRITE "${CMAKE_BINARY_DIR}/generated/gui/opencloudguilib.h"
 +    "#pragma once\n#include \"libsync/opencloudsynclib.h\"\n#define OPENCLOUD_GUI_EXPORT OPENCLOUD_SYNC_EXPORT\n")
-+
+ 
+-if(WITH_CRASHREPORTER)
+-    set_source_files_properties(platform.cpp PROPERTIES COMPILE_DEFINITIONS CRASHREPORTER_EXECUTABLE="${CRASHREPORTER_EXECUTABLE}")
+-    target_link_libraries(libsync PRIVATE CrashReporterQt::Handler)
 +# Qt ships pkg-config files on some platforms and not others - MSYS2's qt6-base has
 +# none at all - so ask pkg-config whether it can see Qt before naming it in Requires,
 +# and fall back to the include and library paths CMake itself resolved.
@@ -356,9 +367,14 @@ index 3156120..d131fd0 100644
 +    if(NOT _qt_core_implib)
 +        get_target_property(_qt_core_implib Qt6::Core IMPORTED_LOCATION_RELEASE)
      endif()
+-endif()
 +    get_filename_component(_qt_libdir "${_qt_core_implib}" DIRECTORY)
 +    string(APPEND OPENCLOUD_UPLOAD_PC_QT_LIBS " -L${_qt_libdir}")
-+
+ 
+-target_sources(libsync PRIVATE
+-    csync.cpp
+-    csync_exclude.cpp
+-)
 +    foreach(_module IN LISTS OPENCLOUD_UPLOAD_PC_QT_MODULES)
 +        get_target_property(_includes Qt6::${_module} INTERFACE_INCLUDE_DIRECTORIES)
 +        foreach(_include IN LISTS _includes)
@@ -370,13 +386,8 @@ index 3156120..d131fd0 100644
 +        endforeach()
 +        string(APPEND OPENCLOUD_UPLOAD_PC_QT_LIBS " -lQt6${_module}")
 +    endforeach()
- endif()
++endif()
  
--target_sources(libsync PRIVATE
--    csync.cpp
--    csync_exclude.cpp
--)
--
 +# The public headers include qt6keychain/keychain.h, and QtKeychain ships no
 +# pkg-config file, so bake its paths into ours for extconf.
 +set(QTKEYCHAIN_INCLUDE_DIR "${QTKEYCHAIN_INCLUDE_DIRS}")
