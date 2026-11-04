@@ -1,8 +1,8 @@
 diff --git a/src/libsync/CMakeLists.txt b/src/libsync/CMakeLists.txt
-index 3156120..1481b5d 100644
+index 3156120..c96af57 100644
 --- a/src/libsync/CMakeLists.txt
 +++ b/src/libsync/CMakeLists.txt
-@@ -1,186 +1,307 @@
+@@ -1,186 +1,312 @@
 -find_package(LibreGraphAPI 1.0.8 REQUIRED)
 -set_package_properties(LibreGraphAPI PROPERTIES
 -        URL https://github.com/opencloud-eu/libre-graph-api-cpp-qt-client
@@ -290,11 +290,10 @@ index 3156120..1481b5d 100644
 -target_link_libraries(libsync PUBLIC $<BUILD_INTERFACE:OpenAPI::LibreGraphAPI>)
 -add_subdirectory(graphapi)
 -add_subdirectory(vfs)
-+    # The Cloud Filter API ships with the Windows SDK, and mingw-w64 carries
-+    # neither cfapi.h nor an import library for cldapi, so ask rather than
-+    # assume: with MSVC cfapi is built, with mingw windows is left on Off.
-+    include(CheckIncludeFileCXX)
-+    check_include_file_cxx(cfapi.h HAVE_CFAPI_H)
++    # The Cloud Filter API ships with the Windows SDK rather than with
++    # mingw-w64, so a mingw build has to be pointed at it: pass the SDK's um
++    # directories in CMAKE_INCLUDE_PATH and CMAKE_LIBRARY_PATH.
++    find_path(CFAPI_INCLUDE_DIR NAMES cfapi.h)
 +    find_library(CLDAPI_LIBRARY NAMES cldapi)
  
 -if ( APPLE )
@@ -305,16 +304,22 @@ index 3156120..1481b5d 100644
 -         /System/Library/Frameworks/IOKit.framework
 -    )
 -endif()
-+    if(HAVE_CFAPI_H AND CLDAPI_LIBRARY)
++    if(CFAPI_INCLUDE_DIR AND CLDAPI_LIBRARY)
 +        target_sources(opencloud-upload PRIVATE
 +            ${CMAKE_SOURCE_DIR}/src/plugins/vfs/cfapi/cfapiwrapper.cpp
 +            ${CMAKE_SOURCE_DIR}/src/plugins/vfs/cfapi/hydrationdevice.cpp
 +            ${CMAKE_SOURCE_DIR}/src/plugins/vfs/cfapi/vfs_cfapi.cpp
 +        )
++        # Only this one header, by its own directory: the SDK's um directory
++        # holds windows.h and the rest of them too, and putting that on the
++        # include path would shadow mingw's own for every file here.
++        file(WRITE ${CMAKE_BINARY_DIR}/cfapi-include/cfapi.h
++            "#include \"${CFAPI_INCLUDE_DIR}/cfapi.h\"\n")
++        target_include_directories(opencloud-upload PUBLIC ${CMAKE_BINARY_DIR}/cfapi-include)
 +        target_link_libraries(opencloud-upload PUBLIC ${CLDAPI_LIBRARY} windowsapp)
 +        target_compile_definitions(opencloud-upload PUBLIC OPENCLOUD_HAVE_CFAPI)
 +    else()
-+        message(WARNING "No Cloud Filter API in this toolchain: building without the cfapi virtual filesystem")
++        message(WARNING "No Cloud Filter API found: building without the cfapi virtual filesystem")
 +    endif()
 +else()
 +    find_library(OPENVFS_LIBRARY NAMES openvfs REQUIRED)

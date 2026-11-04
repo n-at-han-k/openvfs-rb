@@ -170,9 +170,24 @@ jobs:
         run: |
           $prefix = "$env:GITHUB_WORKSPACE/build/prefix" -replace '\\', '/'
           $sha1 = git -C opencloud-desktop rev-parse HEAD
+
+          # cfapi.h and cldapi are the Windows SDK's, not mingw's, and a mingw
+          # build does not look there by itself. Newest SDK wins, and an absent
+          # one leaves the paths empty, which the build reports and carries on.
+          $kits = "C:/Program Files (x86)/Windows Kits/10"
+          $sdk = Get-ChildItem "$kits/Include" -ErrorAction SilentlyContinue |
+            Sort-Object Name | Select-Object -Last 1
+          if ($sdk) {
+            $include = "$kits/Include/$($sdk.Name)/um"
+            $lib = "$kits/Lib/$($sdk.Name)/um/x64"
+            Write-Host "Windows SDK $($sdk.Name)"
+          }
+
           cmake -S opencloud-desktop -B build/desktop-upload -G Ninja `
             -DCMAKE_BUILD_TYPE=Release `
             "-DCMAKE_INSTALL_PREFIX=$prefix" `
+            "-DCMAKE_INCLUDE_PATH=$include" `
+            "-DCMAKE_LIBRARY_PATH=$lib" `
             "-DGIT_SHA1=$sha1"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           cmake --build build/desktop-upload
