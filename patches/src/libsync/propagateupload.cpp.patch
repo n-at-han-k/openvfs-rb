@@ -1,5 +1,5 @@
 diff --git a/src/libsync/propagateupload.cpp b/src/libsync/propagateupload.cpp
-index 0d13bb6..e7c801b 100644
+index 0d13bb6..313db42 100644
 --- a/src/libsync/propagateupload.cpp
 +++ b/src/libsync/propagateupload.cpp
 @@ -26,7 +26,6 @@
@@ -27,3 +27,28 @@ index 0d13bb6..e7c801b 100644
  
      if (!_item->_etag.isEmpty() && _item->_etag != QLatin1String("empty_etag")
          && (_item->instruction() & ~(CSYNC_INSTRUCTION_NEW | CSYNC_INSTRUCTION_TYPE_CHANGE)) // On new files never send a If-Match
+@@ -571,14 +560,16 @@ void PropagateUploadFileCommon::finalize()
+         return;
+     }
+ 
+-    // Files that were new on the remote shouldn't have online-only pin state
+-    // even if their parent folder is online-only.
+-    if (_item->instruction() & (CSYNC_INSTRUCTION_NEW | CSYNC_INSTRUCTION_TYPE_CHANGE)) {
+-        auto &vfs = propagator()->syncOptions()._vfs;
+-        const auto pin = vfs->pinState(_item->localName());
+-        if (pin && *pin == PinState::OnlineOnly) {
+-            std::ignore = vfs->setPinState(_item->localName(), PinState::Unspecified);
+-        }
++    // An uploaded file is online-only, so the engine dehydrates it as soon as
++    // it can: the server has the content now, and the point of syncing this
++    // way is that holding a local copy of everything sent is what we are not
++    // doing. Upstream clears the pin here instead, keeping a file local
++    // because it was added locally.
++    //
++    // Opening one hydrates it and the engine sets it Unspecified, so a file
++    // somebody actually uses stops being dropped.
++    if (const auto &vfs = propagator()->syncOptions()._vfs; vfs->mode() != Vfs::Mode::Off) {
++        std::ignore = vfs->setPinState(_item->localName(), PinState::OnlineOnly);
+     }
+ 
+     // Remove from the progress database:
