@@ -1,8 +1,8 @@
 diff --git a/src/libsync/CMakeLists.txt b/src/libsync/CMakeLists.txt
-index 3156120..5f51359 100644
+index 3156120..682884e 100644
 --- a/src/libsync/CMakeLists.txt
 +++ b/src/libsync/CMakeLists.txt
-@@ -1,186 +1,269 @@
+@@ -1,186 +1,274 @@
 -find_package(LibreGraphAPI 1.0.8 REQUIRED)
 -set_package_properties(LibreGraphAPI PROPERTIES
 -        URL https://github.com/opencloud-eu/libre-graph-api-cpp-qt-client
@@ -255,24 +255,12 @@ index 3156120..5f51359 100644
 -        COMPILE_DEFINITIONS EXCLUDE_FILE_NAME="${EXCLUDE_FILE_NAME}"
 +target_compile_definitions(opencloud-upload PUBLIC
 +    OPENCLOUD_SYNC_EXCLUDE_FILE="${CMAKE_INSTALL_FULL_DATADIR}/opencloud-upload/sync-exclude.lst"
- )
--
--target_link_libraries(libsync PUBLIC $<BUILD_INTERFACE:OpenAPI::LibreGraphAPI>)
--add_subdirectory(graphapi)
--add_subdirectory(vfs)
--
--if ( APPLE )
--    target_link_libraries(libsync PUBLIC
--         /System/Library/Frameworks/CoreServices.framework
--         /System/Library/Frameworks/Foundation.framework
--         /System/Library/Frameworks/AppKit.framework
--         /System/Library/Frameworks/IOKit.framework
--    )
++)
 +if(MSVC)
 +    target_compile_options(opencloud-upload PRIVATE /Gy /Gw)
 +else()
 +    target_compile_options(opencloud-upload PRIVATE -ffunction-sections -fdata-sections)
- endif()
++endif()
 +target_include_directories(opencloud-upload PUBLIC
 +    ${CMAKE_SOURCE_DIR}/src
 +    ${CMAKE_SOURCE_DIR}/src/libsync
@@ -289,22 +277,38 @@ index 3156120..5f51359 100644
 +    SQLite::SQLite3
 +    Qt6Keychain::Qt6Keychain
 +    ZLIB::ZLIB
-+)
+ )
  
--if(Inotify_FOUND)
--    target_include_directories(libsync PRIVATE ${Inotify_INCLUDE_DIRS})
--    target_link_libraries(libsync PUBLIC ${Inotify_LIBRARIES})
+-target_link_libraries(libsync PUBLIC $<BUILD_INTERFACE:OpenAPI::LibreGraphAPI>)
+-add_subdirectory(graphapi)
+-add_subdirectory(vfs)
 +# The openvfs plugin, built in rather than loaded. OPENVFS_EXE is the fuse
 +# binary it spawns to mount the layer; without placeholders every file is
 +# downloaded, which is the whole reason the plugin is here.
++set(OPENCLOUD_UPLOAD_PC_OPENVFS_LIBS "")
 +if(NOT WIN32)
 +    find_library(OPENVFS_LIBRARY NAMES openvfs REQUIRED)
 +    find_path(OPENVFS_INCLUDE_DIR NAMES openvfs/openvfs.h REQUIRED)
 +    find_program(OPENVFS_EXECUTABLE NAMES openvfs REQUIRED)
-+
+ 
+-if ( APPLE )
+-    target_link_libraries(libsync PUBLIC
+-         /System/Library/Frameworks/CoreServices.framework
+-         /System/Library/Frameworks/Foundation.framework
+-         /System/Library/Frameworks/AppKit.framework
+-         /System/Library/Frameworks/IOKit.framework
+-    )
+-endif()
 +    target_link_libraries(opencloud-upload PUBLIC ${OPENVFS_LIBRARY})
 +    target_include_directories(opencloud-upload PUBLIC ${OPENVFS_INCLUDE_DIR})
 +    target_compile_definitions(opencloud-upload PRIVATE OPENVFS_EXE="${OPENVFS_EXECUTABLE}")
+ 
+-if(Inotify_FOUND)
+-    target_include_directories(libsync PRIVATE ${Inotify_INCLUDE_DIRS})
+-    target_link_libraries(libsync PUBLIC ${Inotify_LIBRARIES})
++    # opencloud-upload is static, so the extension links openvfs itself.
++    get_filename_component(_openvfs_libdir "${OPENVFS_LIBRARY}" DIRECTORY)
++    set(OPENCLOUD_UPLOAD_PC_OPENVFS_LIBS " -L${_openvfs_libdir} -lopenvfs")
  endif()
  
 -if(NO_MSG_HANDLER)
