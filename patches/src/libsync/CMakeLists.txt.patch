@@ -1,8 +1,8 @@
 diff --git a/src/libsync/CMakeLists.txt b/src/libsync/CMakeLists.txt
-index 3156120..8f421be 100644
+index 3156120..e037154 100644
 --- a/src/libsync/CMakeLists.txt
 +++ b/src/libsync/CMakeLists.txt
-@@ -1,186 +1,354 @@
+@@ -1,186 +1,359 @@
 -find_package(LibreGraphAPI 1.0.8 REQUIRED)
 -set_package_properties(LibreGraphAPI PROPERTIES
 -        URL https://github.com/opencloud-eu/libre-graph-api-cpp-qt-client
@@ -380,6 +380,11 @@ index 3156120..8f421be 100644
 +        # opencloud-upload is a static archive, so the extension does its own
 +        # linking from the .pc file: cldapi for the Cloud Filter API and
 +        # windowsapp for the WinRT activation the registration goes through.
++        # windowsapp is mingw's own and on the default search path; cldapi is
++        # the SDK's, under a directory with spaces and brackets in its name
++        # that no .pc file can carry, so it is staged into libdir, which the
++        # Libs line already points -L at. ld tries name.lib there.
++        install(FILES ${CLDAPI_LIBRARY} DESTINATION ${CMAKE_INSTALL_LIBDIR} RENAME cldapi.lib)
 +        set(OPENCLOUD_UPLOAD_PC_VFS_LIBS " -lcldapi -lwindowsapp")
 +    else()
 +        message(WARNING "No Cloud Filter API found: building without the cfapi virtual filesystem")
