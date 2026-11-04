@@ -63,15 +63,19 @@
             pkgs.kdePackages.qtkeychain
             pkgs.kdePackages.extra-cmake-modules
             libreGraphApi
-            # The vfs/openvfs plugin is built into libsync, so it needs the
-            # library to link and the fuse binary on PATH for find_program to
-            # bake into OPENVFS_EXE.
+            # The vfs/openvfs plugin is built into libsync, so it links the library.
             openvfsLibrary
           ];
           dontWrapQtApps = true;
           strictDeps = true;
 
-          cmakeFlags = [ "-DGIT_SHA1=${desktop.rev}" ];
+          # find_program cannot locate the fuse binary: strictDeps keeps a
+          # buildInput's bin off PATH, so hand it the path it bakes into
+          # OPENVFS_EXE.
+          cmakeFlags = [
+            "-DGIT_SHA1=${desktop.rev}"
+            "-DOPENVFS_EXECUTABLE=${openvfsLibrary}/bin/openvfs"
+          ];
 
           meta = {
             description = "OpenCloud Desktop's account and streaming PUT upload jobs";
