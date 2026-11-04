@@ -1,8 +1,8 @@
 diff --git a/src/libsync/CMakeLists.txt b/src/libsync/CMakeLists.txt
-index 3156120..d1b5f41 100644
+index 3156120..3edfb2f 100644
 --- a/src/libsync/CMakeLists.txt
 +++ b/src/libsync/CMakeLists.txt
-@@ -1,186 +1,329 @@
+@@ -1,186 +1,349 @@
 -find_package(LibreGraphAPI 1.0.8 REQUIRED)
 -set_package_properties(LibreGraphAPI PROPERTIES
 -        URL https://github.com/opencloud-eu/libre-graph-api-cpp-qt-client
@@ -245,7 +245,13 @@ index 3156120..d1b5f41 100644
 +    QT_NO_FOREACH
 +    QT_DISABLE_DEPRECATED_BEFORE=0x060200
 +    QT_NO_CONTEXTLESS_CONNECT
-+)
+ )
+-
+-ecm_finalize_qml_module(libsync DESTINATION ${KDE_INSTALL_QMLDIR})
+-
+-set_source_files_properties(configfile.cpp
+-    PROPERTIES
+-        COMPILE_DEFINITIONS EXCLUDE_FILE_NAME="${EXCLUDE_FILE_NAME}"
 +target_compile_definitions(opencloud-upload PUBLIC
 +    OPENCLOUD_SYNC_EXCLUDE_FILE="${CMAKE_INSTALL_FULL_DATADIR}/opencloud-upload/sync-exclude.lst"
 +)
@@ -272,29 +278,15 @@ index 3156120..d1b5f41 100644
 +    ZLIB::ZLIB
  )
  
--ecm_finalize_qml_module(libsync DESTINATION ${KDE_INSTALL_QMLDIR})
+-target_link_libraries(libsync PUBLIC $<BUILD_INTERFACE:OpenAPI::LibreGraphAPI>)
+-add_subdirectory(graphapi)
+-add_subdirectory(vfs)
 +# The vfs plugins, built in rather than loaded, and one platform's socket api
 +# so a plugin can be asked for the content of a placeholder. Windows hydrates
 +# through the Cloud Filter API's own callbacks, so only openvfs needs the fuse
 +# binary that OPENVFS_EXE names.
 +set(OPENCLOUD_UPLOAD_PC_OPENVFS_LIBS "")
 +target_sources(opencloud-upload PRIVATE ${CMAKE_SOURCE_DIR}/src/gui/socketapi/socketapi.cpp)
- 
--set_source_files_properties(configfile.cpp
--    PROPERTIES
--        COMPILE_DEFINITIONS EXCLUDE_FILE_NAME="${EXCLUDE_FILE_NAME}"
--)
-+if(WIN32)
-+    target_sources(opencloud-upload PRIVATE ${CMAKE_SOURCE_DIR}/src/gui/guiutility_win.cpp)
- 
--target_link_libraries(libsync PUBLIC $<BUILD_INTERFACE:OpenAPI::LibreGraphAPI>)
--add_subdirectory(graphapi)
--add_subdirectory(vfs)
-+    # The Cloud Filter API ships with the Windows SDK rather than with
-+    # mingw-w64, so a mingw build has to be pointed at it: pass the SDK's um
-+    # directories in CMAKE_INCLUDE_PATH and CMAKE_LIBRARY_PATH.
-+    find_path(CFAPI_INCLUDE_DIR NAMES cfapi.h)
-+    find_library(CLDAPI_LIBRARY NAMES cldapi)
  
 -if ( APPLE )
 -    target_link_libraries(libsync PUBLIC
@@ -304,11 +296,42 @@ index 3156120..d1b5f41 100644
 -         /System/Library/Frameworks/IOKit.framework
 -    )
 -endif()
++if(WIN32)
++    target_sources(opencloud-upload PRIVATE ${CMAKE_SOURCE_DIR}/src/gui/guiutility_win.cpp)
+ 
+-if(Inotify_FOUND)
+-    target_include_directories(libsync PRIVATE ${Inotify_INCLUDE_DIRS})
+-    target_link_libraries(libsync PUBLIC ${Inotify_LIBRARIES})
+-endif()
++    # The Cloud Filter API ships with the Windows SDK rather than with
++    # mingw-w64, so a mingw build has to be pointed at it: pass the SDK's um
++    # directories in CMAKE_INCLUDE_PATH and CMAKE_LIBRARY_PATH.
++    find_path(CFAPI_INCLUDE_DIR NAMES cfapi.h)
++    find_library(CLDAPI_LIBRARY NAMES cldapi)
+ 
+-if(NO_MSG_HANDLER)
+-    target_compile_definitions(libsync PRIVATE -DNO_MSG_HANDLER=1)
+-endif()
 +    if(CFAPI_INCLUDE_DIR AND CLDAPI_LIBRARY)
-+        target_sources(opencloud-upload PRIVATE
++        set(_cfapi_sources
 +            ${CMAKE_SOURCE_DIR}/src/plugins/vfs/cfapi/cfapiwrapper.cpp
 +            ${CMAKE_SOURCE_DIR}/src/plugins/vfs/cfapi/hydrationdevice.cpp
 +            ${CMAKE_SOURCE_DIR}/src/plugins/vfs/cfapi/vfs_cfapi.cpp
++        )
++        target_sources(opencloud-upload PRIVATE ${_cfapi_sources})
+ 
+-GENERATE_EXPORT_HEADER(libsync
+-        EXPORT_MACRO_NAME OPENCLOUD_SYNC_EXPORT
+-        EXPORT_FILE_NAME opencloudsynclib.h
+-        STATIC_DEFINE OPENCLOUD_BUILT_AS_STATIC
+-)
++        # The rest of this builds with exceptions off, and C++/WinRT does not:
++        # it throws hresult_error, which the plugin catches. Enabled for these
++        # translation units alone, as the appimage updater's shim is.
++        set_source_files_properties(${_cfapi_sources}
++            TARGET_DIRECTORY opencloud-upload
++            PROPERTIES COMPILE_OPTIONS
++                "$<IF:$<CXX_COMPILER_ID:MSVC>,/EHsc,-fexceptions>"
 +        )
 +        # Only this one header, by its own directory: the SDK's um directory
 +        # holds windows.h and the rest of them too, and putting that on the
@@ -331,6 +354,21 @@ index 3156120..d1b5f41 100644
 +#endif
 +#include \"${CFAPI_INCLUDE_DIR}/cfapi.h\"
 +#pragma GCC diagnostic pop
+ 
+-set_target_properties(libsync PROPERTIES
+-        OUTPUT_NAME "OpenCloudLibSync"
+-        VERSION ${MIRALL_VERSION}
+-        SOVERSION ${MIRALL_SOVERSION}
+-)
++// The NTSTATUS codes the plugin answers a fetch with. mingw-w64's ntstatus.h
++// has no STATUS_CLOUD_FILE_ at all, and the SDK's cannot be taken wholesale
++// without redefining everything mingw's does have.
++#ifndef STATUS_CLOUD_FILE_NOT_IN_SYNC
++#define STATUS_CLOUD_FILE_NOT_IN_SYNC ((NTSTATUS)0xC000CF08L)
++#endif
++#ifndef STATUS_CLOUD_FILE_NOT_SUPPORTED
++#define STATUS_CLOUD_FILE_NOT_SUPPORTED ((NTSTATUS)0xC000CF0AL)
++#endif
 +")
 +        target_include_directories(opencloud-upload PUBLIC ${CMAKE_BINARY_DIR}/cfapi-include)
 +        target_link_libraries(opencloud-upload PUBLIC ${CLDAPI_LIBRARY} windowsapp)
@@ -342,15 +380,18 @@ index 3156120..d1b5f41 100644
 +    find_library(OPENVFS_LIBRARY NAMES openvfs REQUIRED)
 +    find_path(OPENVFS_INCLUDE_DIR NAMES openvfs/openvfs.h REQUIRED)
 +    find_program(OPENVFS_EXECUTABLE NAMES openvfs REQUIRED)
-+
+ 
+-if(WITH_CRASHREPORTER)
+-    set_source_files_properties(platform.cpp PROPERTIES COMPILE_DEFINITIONS CRASHREPORTER_EXECUTABLE="${CRASHREPORTER_EXECUTABLE}")
+-    target_link_libraries(libsync PRIVATE CrashReporterQt::Handler)
 +    target_link_libraries(opencloud-upload PUBLIC ${OPENVFS_LIBRARY})
 +    target_include_directories(opencloud-upload PUBLIC ${OPENVFS_INCLUDE_DIR})
 +    target_sources(opencloud-upload PRIVATE ${CMAKE_SOURCE_DIR}/src/plugins/vfs/openvfs/vfs_openvfs.cpp)
 +    target_compile_definitions(opencloud-upload PRIVATE OPENVFS_EXE="${OPENVFS_EXECUTABLE}")
  
--if(Inotify_FOUND)
--    target_include_directories(libsync PRIVATE ${Inotify_INCLUDE_DIRS})
--    target_link_libraries(libsync PUBLIC ${Inotify_LIBRARIES})
+-    if(UNIX AND NOT MAC)
+-        find_package(Threads REQUIRED)
+-        target_link_libraries(libsync PUBLIC Threads::Threads)
 +    if(APPLE)
 +        target_sources(opencloud-upload PRIVATE
 +            ${CMAKE_SOURCE_DIR}/src/gui/guiutility_mac.mm
@@ -358,15 +399,16 @@ index 3156120..d1b5f41 100644
 +        )
 +    else()
 +        target_sources(opencloud-upload PRIVATE ${CMAKE_SOURCE_DIR}/src/gui/guiutility_unix.cpp)
-+    endif()
+     endif()
 +
 +    # opencloud-upload is static, so the extension links openvfs itself.
 +    get_filename_component(_openvfs_libdir "${OPENVFS_LIBRARY}" DIRECTORY)
 +    set(OPENCLOUD_UPLOAD_PC_OPENVFS_LIBS " -L${_openvfs_libdir} -lopenvfs")
  endif()
  
--if(NO_MSG_HANDLER)
--    target_compile_definitions(libsync PRIVATE -DNO_MSG_HANDLER=1)
+-target_sources(libsync PRIVATE
+-    csync.cpp
+-    csync_exclude.cpp
 +if(APPLE)
 +    target_link_libraries(opencloud-upload PUBLIC
 +        "-framework AppKit"
@@ -374,12 +416,8 @@ index 3156120..d1b5f41 100644
 +        "-framework Foundation"
 +        "-framework IOKit"
 +    )
- endif()
- 
--GENERATE_EXPORT_HEADER(libsync
--        EXPORT_MACRO_NAME OPENCLOUD_SYNC_EXPORT
--        EXPORT_FILE_NAME opencloudsynclib.h
--        STATIC_DEFINE OPENCLOUD_BUILT_AS_STATIC
++endif()
++
 +file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated/libsync")
 +generate_export_header(opencloud-upload
 +    EXPORT_MACRO_NAME OPENCLOUD_SYNC_EXPORT
@@ -387,20 +425,20 @@ index 3156120..d1b5f41 100644
 +    STATIC_DEFINE OPENCLOUD_BUILT_AS_STATIC
  )
  
--set_target_properties(libsync PROPERTIES
--        OUTPUT_NAME "OpenCloudLibSync"
--        VERSION ${MIRALL_VERSION}
--        SOVERSION ${MIRALL_SOVERSION}
--)
 +# src/gui headers include "gui/opencloudguilib.h"; upstream generates it from the
 +# OpenCloudGui target, which this build does not have. Alias it onto our own macro.
 +file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated/gui")
 +file(WRITE "${CMAKE_BINARY_DIR}/generated/gui/opencloudguilib.h"
 +    "#pragma once\n#include \"libsync/opencloudsynclib.h\"\n#define OPENCLOUD_GUI_EXPORT OPENCLOUD_SYNC_EXPORT\n")
  
--if(WITH_CRASHREPORTER)
--    set_source_files_properties(platform.cpp PROPERTIES COMPILE_DEFINITIONS CRASHREPORTER_EXECUTABLE="${CRASHREPORTER_EXECUTABLE}")
--    target_link_libraries(libsync PRIVATE CrashReporterQt::Handler)
+-try_compile(HAS_CLOCK_CAST
+-        SOURCE_FROM_CONTENT chrono_test.cpp "
+-#include <chrono>
+-int main() {
+-    std::chrono::clock_cast<std::chrono::system_clock>;
+-}"
+-)
+-message(STATUS "HAS_CLOCK_CAST: ${HAS_CLOCK_CAST}")
 +# Qt ships pkg-config files on some platforms and not others - MSYS2's qt6-base has
 +# none at all - so ask pkg-config whether it can see Qt before naming it in Requires,
 +# and fall back to the include and library paths CMake itself resolved.
@@ -410,9 +448,8 @@ index 3156120..d1b5f41 100644
 +    pkg_check_modules(OPENCLOUD_UPLOAD_QT6_PC QUIET Qt6Core)
 +endif()
  
--    if(UNIX AND NOT MAC)
--        find_package(Threads REQUIRED)
--        target_link_libraries(libsync PUBLIC Threads::Threads)
+-if(HAS_CLOCK_CAST)
+-    set_source_files_properties(filesystem.cpp PROPERTIES COMPILE_DEFINITIONS HAS_CLOCK_CAST)
 +set(OPENCLOUD_UPLOAD_PC_QT_CFLAGS "")
 +set(OPENCLOUD_UPLOAD_PC_QT_LIBS "")
 +if(OPENCLOUD_UPLOAD_QT6_PC_FOUND)
@@ -426,15 +463,10 @@ index 3156120..d1b5f41 100644
 +    get_target_property(_qt_core_implib Qt6::Core IMPORTED_IMPLIB_RELEASE)
 +    if(NOT _qt_core_implib)
 +        get_target_property(_qt_core_implib Qt6::Core IMPORTED_LOCATION_RELEASE)
-     endif()
--endif()
++    endif()
 +    get_filename_component(_qt_libdir "${_qt_core_implib}" DIRECTORY)
 +    string(APPEND OPENCLOUD_UPLOAD_PC_QT_LIBS " -L${_qt_libdir}")
- 
--target_sources(libsync PRIVATE
--    csync.cpp
--    csync_exclude.cpp
--)
++
 +    foreach(_module IN LISTS OPENCLOUD_UPLOAD_PC_QT_MODULES)
 +        get_target_property(_includes Qt6::${_module} INTERFACE_INCLUDE_DIRECTORIES)
 +        foreach(_include IN LISTS _includes)
@@ -446,33 +478,21 @@ index 3156120..d1b5f41 100644
 +        endforeach()
 +        string(APPEND OPENCLOUD_UPLOAD_PC_QT_LIBS " -lQt6${_module}")
 +    endforeach()
-+endif()
+ endif()
  
+-add_subdirectory(common)
 +# The public headers include qt6keychain/keychain.h, and QtKeychain ships no
 +# pkg-config file, so bake its paths into ours for extconf.
 +set(QTKEYCHAIN_INCLUDE_DIR "${QTKEYCHAIN_INCLUDE_DIRS}")
 +get_filename_component(_qtkeychain_prefix "${Qt6Keychain_DIR}/../../.." ABSOLUTE)
 +set(QTKEYCHAIN_LIBDIR "${_qtkeychain_prefix}/lib")
- 
--try_compile(HAS_CLOCK_CAST
--        SOURCE_FROM_CONTENT chrono_test.cpp "
--#include <chrono>
--int main() {
--    std::chrono::clock_cast<std::chrono::system_clock>;
--}"
++
 +configure_file(
 +    "${CMAKE_SOURCE_DIR}/opencloud-upload.pc.in"
 +    "${CMAKE_BINARY_DIR}/opencloud-upload.pc"
 +    @ONLY
- )
--message(STATUS "HAS_CLOCK_CAST: ${HAS_CLOCK_CAST}")
++)
  
--if(HAS_CLOCK_CAST)
--    set_source_files_properties(filesystem.cpp PROPERTIES COMPILE_DEFINITIONS HAS_CLOCK_CAST)
--endif()
--
--add_subdirectory(common)
--
 -install(TARGETS libsync EXPORT OpenCloudConfig ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
 +install(TARGETS opencloud-upload ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 +install(DIRECTORY
