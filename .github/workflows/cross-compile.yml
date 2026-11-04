@@ -144,7 +144,9 @@ jobs:
       - uses: ruby/setup-ruby-pkgs@v1
         with:
           ruby-version: ${{ matrix.ruby.abi }}
-          mingw: cmake ninja pkgconf qt6-base qtkeychain sqlite3 zlib extra-cmake-modules
+          # cppwinrt is the cfapi plugin's: it registers the sync root through
+          # the WinRT storage provider api, which mingw does not carry itself.
+          mingw: cmake ninja pkgconf qt6-base qtkeychain sqlite3 zlib extra-cmake-modules cppwinrt
 
       - name: Apply the desktop patches
         shell: bash
