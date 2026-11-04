@@ -1,5 +1,5 @@
 diff --git a/src/libsync/vfs/vfs.cpp b/src/libsync/vfs/vfs.cpp
-index 7261b2d..8f74c16 100644
+index 7261b2d..be93f71 100644
 --- a/src/libsync/vfs/vfs.cpp
 +++ b/src/libsync/vfs/vfs.cpp
 @@ -18,6 +18,11 @@
@@ -7,7 +7,7 @@ index 7261b2d..8f74c16 100644
  #include "vfs.h"
  
 +#include "plugins/vfs/off/vfs_off.h"
-+#ifndef Q_OS_WIN
++#ifdef Q_OS_LINUX
 +#include "plugins/vfs/openvfs/vfs_openvfs.h"
 +#endif
 +
@@ -29,7 +29,7 @@ index 7261b2d..8f74c16 100644
 +    if (mode == Vfs::Mode::Off) {
 +        return true;
 +    }
-+#ifndef Q_OS_WIN
++#ifdef Q_OS_LINUX
 +    if (mode == Vfs::Mode::OpenVFS) {
 +        return OpenVfsPluginFactory().checkAvailability();
 +    }
@@ -44,7 +44,7 @@ index 7261b2d..8f74c16 100644
 +    if (mode == Vfs::Mode::Off) {
 +        return std::make_unique<VfsOff>(nullptr);
 +    }
-+#ifndef Q_OS_WIN
++#ifdef Q_OS_LINUX
 +    if (mode == Vfs::Mode::OpenVFS) {
 +        return std::make_unique<OpenVFS>(nullptr);
 +    }
@@ -64,7 +64,7 @@ index 7261b2d..8f74c16 100644
 +    if (mode == Vfs::Mode::Off) {
 +        return {};
 +    }
-+#ifndef Q_OS_WIN
++#ifdef Q_OS_LINUX
 +    if (mode == Vfs::Mode::OpenVFS) {
 +        return OpenVfsPluginFactory().prepare(canonicalPath, accountUuid);
 +    }

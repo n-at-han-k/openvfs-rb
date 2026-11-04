@@ -1,8 +1,8 @@
 diff --git a/src/libsync/CMakeLists.txt b/src/libsync/CMakeLists.txt
-index 3156120..682884e 100644
+index 3156120..d8b325a 100644
 --- a/src/libsync/CMakeLists.txt
 +++ b/src/libsync/CMakeLists.txt
-@@ -1,186 +1,274 @@
+@@ -1,186 +1,275 @@
 -find_package(LibreGraphAPI 1.0.8 REQUIRED)
 -set_package_properties(LibreGraphAPI PROPERTIES
 -        URL https://github.com/opencloud-eu/libre-graph-api-cpp-qt-client
@@ -158,7 +158,6 @@ index 3156120..682884e 100644
 +    ${CMAKE_SOURCE_DIR}/src/libsync/abstractcorejob.cpp
 +    ${CMAKE_SOURCE_DIR}/src/libsync/csync.cpp
 +    ${CMAKE_SOURCE_DIR}/src/plugins/vfs/off/vfs_off.cpp
-+    ${CMAKE_SOURCE_DIR}/src/plugins/vfs/openvfs/vfs_openvfs.cpp
 +    ${CMAKE_SOURCE_DIR}/src/gui/accountmanager.cpp
 +    ${CMAKE_SOURCE_DIR}/src/cmd/tokencredentials.cpp
 +    ${CMAKE_SOURCE_DIR}/src/libsync/platform.cpp
@@ -284,9 +283,10 @@ index 3156120..682884e 100644
 -add_subdirectory(vfs)
 +# The openvfs plugin, built in rather than loaded. OPENVFS_EXE is the fuse
 +# binary it spawns to mount the layer; without placeholders every file is
-+# downloaded, which is the whole reason the plugin is here.
++# downloaded, which is the whole reason the plugin is here. Linux only: so is
++# fuse3, and windows has cfapi.
 +set(OPENCLOUD_UPLOAD_PC_OPENVFS_LIBS "")
-+if(NOT WIN32)
++if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 +    find_library(OPENVFS_LIBRARY NAMES openvfs REQUIRED)
 +    find_path(OPENVFS_INCLUDE_DIR NAMES openvfs/openvfs.h REQUIRED)
 +    find_program(OPENVFS_EXECUTABLE NAMES openvfs REQUIRED)
@@ -301,6 +301,7 @@ index 3156120..682884e 100644
 -endif()
 +    target_link_libraries(opencloud-upload PUBLIC ${OPENVFS_LIBRARY})
 +    target_include_directories(opencloud-upload PUBLIC ${OPENVFS_INCLUDE_DIR})
++    target_sources(opencloud-upload PRIVATE ${CMAKE_SOURCE_DIR}/src/plugins/vfs/openvfs/vfs_openvfs.cpp)
 +    target_compile_definitions(opencloud-upload PRIVATE OPENVFS_EXE="${OPENVFS_EXECUTABLE}")
  
 -if(Inotify_FOUND)
