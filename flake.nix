@@ -69,12 +69,18 @@
           dontWrapQtApps = true;
           strictDeps = true;
 
-          # find_program cannot locate the fuse binary: strictDeps keeps a
-          # buildInput's bin off PATH, so hand it the path it bakes into
-          # OPENVFS_EXE.
+          # OPENVFS_EXE is baked as a string literal into the sync plugin, so
+          # an absolute /nix/store path there would end up in every shipped
+          # gem. "openvfs" resolves through the loader's PATH search instead,
+          # which is what the plugin already falls back to when the baked
+          # path does not exist. -ffile-prefix-map rewrites __FILE__ in
+          # macros like Q_ASSERT so Qt's own header paths do not reach the
+          # output either.
           cmakeFlags = [
             "-DGIT_SHA1=${desktop.rev}"
-            "-DOPENVFS_EXECUTABLE=${openvfsLibrary}/bin/openvfs"
+            "-DOPENVFS_EXECUTABLE=openvfs"
+            "-DCMAKE_CXX_FLAGS=-ffile-prefix-map=/nix/store=/__nix"
+            "-DCMAKE_C_FLAGS=-ffile-prefix-map=/nix/store=/__nix"
           ];
 
           meta = {

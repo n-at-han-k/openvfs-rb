@@ -1,0 +1,71 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Released under the MIT License.
+# Copyright, 2026, by Nathan Kidd.
+
+# REDACT-NIX-STORE(1)                 General Commands Manual                 REDACT-NIX-STORE(1)
+#
+# NAME
+#      bin/redact-nix-store — replace /nix/store/... substrings in each file argument with
+#      equal-length /__nix/_... padding
+#
+# SYNOPSIS
+#      bin/redact-nix-store FILE...
+#
+# DESCRIPTION
+#      -ffile-prefix-map strips the __FILE__ paths out of Q_ASSERT and friends, and OPENVFS_EXE
+#      is baked as the basename rather than a store path, so most of the ways a store path
+#      would reach a shipped object are closed at build time. What still gets in is the linker's
+#      dynstr — patchelf --remove-rpath drops the DT_RPATH tag but leaves the string it pointed
+#      to in .dynstr, and install_name_tool only touches the LC_LOAD_DYLIBs. The remnant is
+#      harmless at load time (nothing points to it), but it still names a build runner's
+#      filesystem.
+#
+#      This walks each file argument and overwrites every /nix/store/<...> substring with a
+#      /__nix/_... pad of identical length. Same byte offsets, same section sizes, nothing in
+#      the rest of the binary moves. The termination set — null, colon, whitespace and quotes —
+#      matches what delimits a store path in the places these strings land: a C string, a
+#      colon-joined rpath, a shell-quoted literal.
+#
+#      The CI runner's workspace path is redacted for the same reason:
+#      /home/runner/work/openvfs-rb/openvfs-rb/... on ubuntu and /Users/runner/work/... on
+#      macOS, which the linker folded into the dynstr too.
+#
+# EXIT STATUS
+#      The bin/redact-nix-store utility exits 0 on success, and >0 if an error occurs.
+#
+# openvfs-rb                            November 6, 2026                REDACT-NIX-STORE(1)
+
+PATTERNS = {
+  %r{/nix/store/[^\0:\s'"]+} => "/__nix/",
+  %r{/home/runner/[^\0:\s'"]+} => "/__ci/",
+  %r{/Users/runner/[^\0:\s'"]+} => "/__ci/",
+}.freeze
+
+def redact_match(match, prefix)
+  if match.bytesize <= prefix.bytesize
+    "_" * match.bytesize
+  else
+    prefix + ("_" * (match.bytesize - prefix.bytesize))
+  end
+end
+
+ARGV.each do |path|
+  original = File.binread(path)
+  redacted = PATTERNS.inject(original) do |data, (pattern, prefix)|
+    data.gsub(pattern){|match| redact_match(match, prefix)}
+  end
+
+  if redacted == original
+    puts "#{path}: clean"
+
+    next
+  end
+
+  File.binwrite(path, redacted)
+
+  count = PATTERNS.keys.sum{|pattern| original.scan(pattern).size}
+
+  puts "#{path}: redacted #{count} build-time path(s)"
+end

@@ -86,6 +86,16 @@ jobs:
             install_name_tool -add_rpath /usr/local/lib "$bundle"
           done
 
+      # install_name_tool only touches the LC_LOAD_DYLIBs; string literals
+      # elsewhere in the bundle still name the build runner's nix store and
+      # workspace. bin/redact-nix-store overwrites those substrings in place
+      # with /__nix/_... padding of the same length, so no byte offset
+      # moves.
+      - name: Redact build-time paths
+        run: |
+          nix develop --command bin/redact-nix-store \
+            ext/openvfs/openvfs.bundle ext/openvfs/occ/occ.bundle
+
       # macOS leaves an openvfs.bundle.dSYM directory of debug symbols
       # beside each bundle, which `cp` refuses and the gem has no use for,
       # so copy the bundles by name rather than globbing.

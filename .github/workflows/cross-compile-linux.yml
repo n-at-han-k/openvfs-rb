@@ -93,6 +93,17 @@ jobs:
             done
           '
 
+      # patchelf --remove-rpath drops the DT_RPATH tag but the string it
+      # pointed to is still in .dynstr, so the shipped object otherwise
+      # names the build runner's nix store and workspace in a .dynstr
+      # nothing reads. bin/redact-nix-store overwrites those substrings
+      # in place with /__nix/_... padding of the same length, so no byte
+      # offset moves and every section's size stays the same.
+      - name: Redact build-time paths
+        run: |
+          nix develop --command bin/redact-nix-store \
+            ext/openvfs/openvfs.so ext/openvfs/occ/occ.so
+
       - name: Stage the objects
         run: |
           mkdir -p objects
