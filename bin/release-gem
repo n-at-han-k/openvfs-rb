@@ -24,13 +24,15 @@
 #      platforms.
 #
 #      This script builds the first locally, downloads the rest from the latest successful
-#      run of the Cross Compile workflow, and pushes all of them. The workflow builds the
-#      platform gems itself, one per matrix job, with bin/package-platform-gem - so what is
-#      downloaded here is already a gem, and this script neither opens nor repacks it.
+#      run of each Cross Compile workflow - one per platform - and pushes all of them. The
+#      workflows build the platform gems themselves, one per matrix job, with
+#      bin/package-platform-gem - so what is downloaded here is already a gem, and this
+#      script neither opens nor repacks it.
 #
-#      So push to main and let Cross Compile finish before releasing: the run it downloads
-#      from has to be one which built this version. A gem's filename carries its version, so
-#      that is checked by name rather than by guessing from the commit the run was for.
+#      So push to main and let every Cross Compile workflow finish before releasing: the
+#      runs it downloads from have to be ones which built this version. A gem's filename
+#      carries its version, so that is checked by name rather than by guessing from the
+#      commit the run was for.
 #
 #      A gem which is already on RubyGems is skipped rather than failed, so a release which
 #      died part way through can be run again. With --dry-run everything is built and
@@ -45,8 +47,12 @@
 #      Requires gh(1), authenticated, to find and download the workflow's artifacts.
 #
 # FILES
-#      .github/workflows/cross-compile.yml
-#              The workflow which builds the platform gems, and whose matrix names the platforms.
+#      .github/workflows/cross-compile-linux.yml
+#      .github/workflows/cross-compile-macos.yml
+#      .github/workflows/cross-compile-windows.yml
+#              The workflows which build the platform gems. One per platform so a windows
+#              error no longer waits on a darwin build, and each is downloaded from here
+#              independently.
 #
 #      pkg/    Where the gems are downloaded. Recreated on each run.
 #
@@ -72,7 +78,9 @@ dry_run = ARGV.include?("--dry-run")
 local_version = OpenVFS::Rb::VERSION
 gem_name = "openvfs-rb"
 gemspec = "openvfs-rb.gemspec"
-workflow = "cross-compile.yml"
+# One Cross Compile workflow per platform so a windows error no longer waits on a
+# darwin build, so the release collects from each rather than from one.
+workflows = %w[cross-compile-linux.yml cross-compile-macos.yml cross-compile-windows.yml]
 pkg_dir = "pkg"
 
 puts "Local version: #{local_version}"
@@ -104,18 +112,20 @@ source_gem = "#{gem_name}-#{local_version}.gem"
 FileUtils.rm_rf(pkg_dir)
 FileUtils.mkdir_p(pkg_dir)
 
-puts "\nLocating latest successful #{workflow} run..."
+workflows.each do |workflow|
+  puts "\nLocating latest successful #{workflow} run..."
 
-run_id = `gh run list --workflow=#{workflow} --status success --limit 1 --json databaseId --jq '.[0].databaseId'`.strip
+  run_id = `gh run list --workflow=#{workflow} --status success --limit 1 --json databaseId --jq '.[0].databaseId'`.strip
 
-if run_id.empty?
-  abort "ERROR: no successful #{workflow} run found. Push to main and let CI build the platform gems first."
+  if run_id.empty?
+    abort "ERROR: no successful #{workflow} run found. Push to main and let CI build the platform gems first."
+  end
+
+  puts "Downloading platform gems from run #{run_id}..."
+
+  system("gh", "run", "download", run_id, "--dir", pkg_dir, "--pattern", "cross-gem-*") ||
+    abort("ERROR: failed to download artifacts from run #{run_id}")
 end
-
-puts "Downloading platform gems from run #{run_id}..."
-
-system("gh", "run", "download", run_id, "--dir", pkg_dir, "--pattern", "cross-gem-*") ||
-  abort("ERROR: failed to download artifacts from run #{run_id}")
 
 platform_gems = Dir["#{pkg_dir}/**/#{gem_name}-#{local_version}-*.gem"].sort
 

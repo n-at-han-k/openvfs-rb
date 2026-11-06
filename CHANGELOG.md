@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-11-06
+
+### Fixed
+
+- A precompiled platform gem loads off the build runner. Nix's cc-wrapper baked a `/nix/store/<hash>-...` rpath into each `.so` and `.bundle` for every `-L` under `/nix/store`, so the loader looked for Qt and the rest of the native stack at paths that exist on no one else's system and the extension failed to resolve its dependencies. The Cross Compile workflow now rewrites the paths out before staging - `patchelf --remove-rpath` on linux, so the loader falls back to `LD_LIBRARY_PATH` and its standard search, and on darwin `install_name_tool` rewrites every `LC_LOAD_DYLIB` to `@rpath/<basename>`, drops every `/nix/store` `LC_RPATH`, and adds the two standard homebrew prefixes.
+
 ## [1.4.2] - 2026-11-04
 
 ### Changed
