@@ -1,0 +1,96 @@
+name: Test Windows
+
+# Windows has no openvfs extension - libopenvfs is Linux/darwin only -
+# and the sus suite exercises it, so running sus here would mostly test
+# that it refuses to load. Instead: build the occ extension against mingw
+# the same way cross-compile-windows.yml does and prove `require
+# "openvfs/occ"` resolves. Rubocop belongs on Linux where the whole
+# bundle installs cleanly; running it on every platform's test workflow
+# tests the same syntax tree three times.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: windows-2025
+
+    steps:
+      - name: Keep line endings as committed
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: ruby/setup-ruby-pkgs@v1
+        with:
+          ruby-version: "3.4"
+          mingw: cmake ninja pkgconf qt6-base qtkeychain sqlite3 zlib extra-cmake-modules cppwinrt
+
+      - name: Apply the desktop patches
+        shell: bash
+        run: bin/apply-patches
+
+      - name: Build the trimmed desktop static library
+        shell: pwsh
+        run: |
+          $prefix = "$env:GITHUB_WORKSPACE/build/prefix" -replace '\\', '/'
+          $sha1 = git -C opencloud-desktop rev-parse HEAD
+
+          $kits = "C:/Program Files (x86)/Windows Kits/10"
+          $sdk = Get-ChildItem "$kits/Include" -ErrorAction SilentlyContinue |
+            Sort-Object Name | Select-Object -Last 1
+          if ($sdk) {
+            $include = "$kits/Include/$($sdk.Name)/um"
+            $lib = "$kits/Lib/$($sdk.Name)/um/x64"
+            Write-Host "Windows SDK $($sdk.Name)"
+          }
+
+          cmake -S opencloud-desktop -B build/desktop-upload -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            "-DCMAKE_INSTALL_PREFIX=$prefix" `
+            "-DCMAKE_INCLUDE_PATH=$include" `
+            "-DCMAKE_LIBRARY_PATH=$lib" `
+            "-DGIT_SHA1=$sha1"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build build/desktop-upload
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --install build/desktop-upload
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          "OPENCLOUD_UPLOAD_PREFIX=$prefix" >> $env:GITHUB_ENV
+
+      - name: Build the occ extension
+        shell: pwsh
+        run: |
+          gem install rice --no-document
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ruby -C ext/openvfs/occ extconf.rb
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          make -C ext/openvfs/occ
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Show mkmf.log
+        if: ${{ failure() }}
+        shell: pwsh
+        run: |
+          foreach ($log in @("ext/openvfs/occ/mkmf.log", "ext/openvfs/mkmf.log")) {
+            if (Test-Path $log) {
+              Write-Host "===== $log"
+              Get-Content $log
+            }
+          }
+
+      - name: Load the extension
+        shell: pwsh
+        run: ruby -Ilib -Iext -e 'require "openvfs/occ"; puts OpenVFS::VERSION'

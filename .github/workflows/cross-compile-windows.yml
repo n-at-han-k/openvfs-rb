@@ -1,31 +1,15 @@
-name: Cross Compile
+name: Cross Compile Windows
 
-# Cross-compiles the C++/Qt native extensions and packages them into precompiled,
-# per-platform native gems, uploaded as build artifacts. This does NOT publish to
-# RubyGems — releasing is bin/release-gem, which downloads these and pushes them.
+# Windows cannot use nix, so it builds the same static library with CMake
+# against MSYS2's ucrt64 toolchain - the one RubyInstaller's own ucrt
+# builds use - and compiles only the occ extension. The openvfs extension
+# is left out here: it wraps libopenvfs, which keeps its placeholder state
+# in POSIX extended attributes, and upstream gates its desktop plugin
+# behind `if (NOT WIN32)` for that reason. The gem configures
+# `virtualFilesMode=off`, so nothing in the API surface needs it.
 #
-# A compiled object only loads on the Ruby ABI it was built against, so one gem per
-# platform carries one object per ABI, under lib/openvfs/3.4 and so on, and
-# lib/openvfs.rb picks by RUBY_VERSION. That is why this is two stages: cross-objects
-# compiles every (platform, ABI) pair, and cross-gem collects a platform's ABIs into
-# one gem. vodozemac-rb gets the same layout from rb-sys, whose ExtensionTask
-# cross-compiles every ABI in one step; that toolchain is Rust-only, so the matrix does
-# it here.
-#
-# Covering a range of ABIs is also what keeps these gems out of rubygems.org's
-# content-addressable scheme, which refuses a push unless required_rubygems_version is
-# ">= 4.1.0.a" - a prerelease floor almost nothing meets. A gem built for a single ABI
-# has to say so, and then name, version and platform no longer identify it.
-#
-# Linux and macOS build inside nix, whose flake provides both the native dependencies
-# and a shell per Ruby ABI.
-#
-# Windows cannot use nix, so it builds the same static library with CMake against
-# MSYS2's ucrt64 toolchain - the one RubyInstaller's own ucrt builds use - and
-# compiles only the occ extension. The openvfs extension is left out there: it wraps
-# libopenvfs, which keeps its placeholder state in POSIX extended attributes, and
-# upstream gates its desktop plugin behind `if (NOT WIN32)` for that reason. The gem
-# configures `virtualFilesMode=off`, so nothing in the API surface needs it.
+# See cross-compile-linux.yml and cross-compile-macos.yml for the sibling
+# platforms; the gem-packaging shape is identical, only the staging differs.
 
 on:
   push:
@@ -33,93 +17,23 @@ on:
     paths:
       - 'ext/**'
       - 'openvfs-rb.gemspec'
-      - 'flake.nix'
-      - 'flake.lock'
-      - 'gemset.nix'
       - 'bin/package-platform-gem'
-      - '.github/workflows/cross-compile.yml'
+      - '.github/workflows/cross-compile-windows.yml'
       - 'lib/**'
-      # The patches decide which desktop sources are compiled at all, and the
-      # submodule pointer decides what they apply to.
       - 'patches/**'
       - 'opencloud-desktop'
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
-  # Magic Nix Cache authenticates with this.
-  id-token: write
 
-# Keyed by workflow as well as ref: a new push cancels this workflow's own previous
-# run rather than queueing another behind it. Sharing one group across workflows
-# instead makes the two runs of a single push cancel each other.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   cross-objects:
-    name: Compile ${{ matrix.target.platform }} objects for Ruby ${{ matrix.ruby.abi }}
-    runs-on: ${{ matrix.target.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        # Every ABI has to build, or bin/package-platform-gem refuses to package: a gem
-        # whose required_ruby_version covers an ABI it has no object for would install
-        # and then fail to load. The set has to match RUBY_ABIS there, and the shells in
-        # flake.nix.
-        ruby:
-          - { abi: "3.3", shell: ruby-33 }
-          - { abi: "3.4", shell: ruby-34 }
-          - { abi: "4.0", shell: ruby-40 }
-        target:
-          - { platform: x86_64-linux, os: ubuntu-latest }
-          - { platform: aarch64-linux, os: ubuntu-24.04-arm }
-          - { platform: x86_64-darwin, os: macos-15-intel }
-          - { platform: aarch64-darwin, os: macos-15 }
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      # The Determinate installer plus Magic Nix Cache, which is the pairing their
-      # docs show. The cache registers itself as a substituter and a post-build hook,
-      # so every path nix builds here is pushed and every path it wants is looked up,
-      # with no key to get right. Needs id-token: write, set on the workflow.
-      - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
-
-      - name: Build native extensions
-        run: |
-          nix develop .#${{ matrix.ruby.shell }} --command ruby -C ext/openvfs extconf.rb
-          nix develop .#${{ matrix.ruby.shell }} --command make -C ext/openvfs
-          nix develop .#${{ matrix.ruby.shell }} --command ruby -C ext/openvfs/occ extconf.rb
-          nix develop .#${{ matrix.ruby.shell }} --command make -C ext/openvfs/occ
-
-      - name: Run the suite
-        run: nix develop .#${{ matrix.ruby.shell }} --command bundle exec sus
-
-      # Named rather than globbed: macOS leaves an openvfs.bundle.dSYM directory of debug
-      # symbols beside each object, which `cp` refuses and the gem has no use for. Each is
-      # tested for because only one of .so and .bundle exists on any given runner.
-      - name: Stage the objects
-        run: |
-          mkdir -p objects
-          for object in ext/openvfs/openvfs.so ext/openvfs/openvfs.bundle \
-                        ext/openvfs/occ/occ.so ext/openvfs/occ/occ.bundle; do
-            if [ -f "$object" ]; then
-              cp "$object" objects/
-            fi
-          done
-          ls -l objects
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: objects-${{ matrix.target.platform }}-${{ matrix.ruby.abi }}
-          path: objects/*
-          if-no-files-found: error
-
-  cross-objects-windows:
     name: Compile ${{ matrix.target.platform }} objects for Ruby ${{ matrix.ruby.abi }}
     runs-on: ${{ matrix.target.os }}
     strategy:
@@ -251,24 +165,15 @@ jobs:
   cross-gem:
     name: Package native gem for ${{ matrix.target.platform }}
     runs-on: ubuntu-latest
-    needs: [cross-objects, cross-objects-windows]
+    needs: cross-objects
     strategy:
       fail-fast: false
       matrix:
-        # The platform the objects were built for, and the name RubyGems knows it by:
-        # Apple silicon is arm64-darwin there, and a gem named aarch64-darwin would
-        # never be selected.
         target:
-          - { platform: x86_64-linux, gem_platform: x86_64-linux }
-          - { platform: aarch64-linux, gem_platform: aarch64-linux }
-          - { platform: x86_64-darwin, gem_platform: x86_64-darwin }
-          - { platform: aarch64-darwin, gem_platform: arm64-darwin }
           - { platform: x64-mingw-ucrt, gem_platform: x64-mingw-ucrt }
     steps:
       - uses: actions/checkout@v4
 
-      # Packaging compiles nothing - it copies already-built objects into a gem - so it
-      # wants a Ruby and none of the native dependencies, whatever platform the gem is for.
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.4"
@@ -278,9 +183,6 @@ jobs:
           pattern: objects-${{ matrix.target.platform }}-*
           path: objects
 
-      # download-artifact names a directory per artifact, so flatten
-      # objects/objects-<platform>-<abi>/ down to the objects/<abi>/ layout
-      # bin/package-platform-gem reads.
       - name: Arrange the objects by ABI
         run: |
           for directory in objects/objects-${{ matrix.target.platform }}-*; do

@@ -1,0 +1,152 @@
+name: Cross Compile Linux
+
+# One platform per workflow so a Windows error does not wait on a darwin
+# build. Linux and macOS share the nix dev shell, so what differs per
+# platform is the runner and the post-build fixup; the three files repeat
+# themselves rather than fan out through a reusable workflow because the
+# repetition is small and the surface area it saves is smaller still.
+#
+# This file: build the Linux native extensions for every Ruby ABI the gem
+# ships, strip the nix-store rpaths from the shipped objects, and pack them
+# into x86_64-linux and aarch64-linux native gems.
+#
+# See cross-compile-macos.yml and cross-compile-windows.yml for the other
+# platforms; the gem-packaging shape is identical, only the staging differs.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ext/**'
+      - 'openvfs-rb.gemspec'
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'gemset.nix'
+      - 'bin/package-platform-gem'
+      - '.github/workflows/cross-compile-linux.yml'
+      - 'lib/**'
+      - 'patches/**'
+      - 'opencloud-desktop'
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+  # Magic Nix Cache authenticates with this.
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cross-objects:
+    name: Compile ${{ matrix.target.platform }} objects for Ruby ${{ matrix.ruby.abi }}
+    runs-on: ${{ matrix.target.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Every ABI has to build, or bin/package-platform-gem refuses to package: a gem
+        # whose required_ruby_version covers an ABI it has no object for would install
+        # and then fail to load. The set has to match RUBY_ABIS there, and the shells in
+        # flake.nix.
+        ruby:
+          - { abi: "3.3", shell: ruby-33 }
+          - { abi: "3.4", shell: ruby-34 }
+          - { abi: "4.0", shell: ruby-40 }
+        target:
+          - { platform: x86_64-linux, os: ubuntu-latest }
+          - { platform: aarch64-linux, os: ubuntu-24.04-arm }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Build native extensions
+        run: |
+          nix develop .#${{ matrix.ruby.shell }} --command ruby -C ext/openvfs extconf.rb
+          nix develop .#${{ matrix.ruby.shell }} --command make -C ext/openvfs
+          nix develop .#${{ matrix.ruby.shell }} --command ruby -C ext/openvfs/occ extconf.rb
+          nix develop .#${{ matrix.ruby.shell }} --command make -C ext/openvfs/occ
+
+      - name: Run the suite
+        run: nix develop .#${{ matrix.ruby.shell }} --command bundle exec sus
+
+      # Nix's cc-wrapper bakes a -rpath entry for every -L in /nix/store, so
+      # objects produced inside `nix develop` name specific store paths that
+      # exist on the runner but on no one else's system. Strip the rpath so
+      # the shipped objects find their dependencies the way every other
+      # precompiled gem does: through LD_LIBRARY_PATH and the loader's
+      # standard search. After the suite so the tests keep the rpath they
+      # were built with; before Stage the objects so the staged copies are
+      # what the gem carries.
+      - name: Make the objects portable
+        run: |
+          nix shell nixpkgs#patchelf --command sh -c '
+            for object in ext/openvfs/openvfs.so ext/openvfs/occ/occ.so; do
+              if [ -f "$object" ]; then
+                patchelf --remove-rpath "$object"
+              fi
+            done
+          '
+
+      - name: Stage the objects
+        run: |
+          mkdir -p objects
+          cp ext/openvfs/openvfs.so ext/openvfs/occ/occ.so objects/
+          ls -l objects
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: objects-${{ matrix.target.platform }}-${{ matrix.ruby.abi }}
+          path: objects/*
+          if-no-files-found: error
+
+  cross-gem:
+    name: Package native gem for ${{ matrix.target.platform }}
+    runs-on: ubuntu-latest
+    needs: cross-objects
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - { platform: x86_64-linux, gem_platform: x86_64-linux }
+          - { platform: aarch64-linux, gem_platform: aarch64-linux }
+    steps:
+      - uses: actions/checkout@v4
+
+      # Packaging compiles nothing - it copies already-built objects into a gem - so it
+      # wants a Ruby and none of the native dependencies, whatever platform the gem is for.
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: objects-${{ matrix.target.platform }}-*
+          path: objects
+
+      # download-artifact names a directory per artifact, so flatten
+      # objects/objects-<platform>-<abi>/ down to the objects/<abi>/ layout
+      # bin/package-platform-gem reads.
+      - name: Arrange the objects by ABI
+        run: |
+          for directory in objects/objects-${{ matrix.target.platform }}-*; do
+            abi="${directory##*-}"
+            mkdir -p "objects/$abi"
+            mv "$directory"/* "objects/$abi/"
+            rmdir "$directory"
+          done
+          find objects -type f | sort
+
+      - name: Package the platform gem
+        run: ruby bin/package-platform-gem ${{ matrix.target.gem_platform }} objects
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cross-gem-${{ matrix.target.platform }}
+          path: pkg/*.gem
+          if-no-files-found: error

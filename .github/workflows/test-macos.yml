@@ -1,25 +1,30 @@
-name: Test
+name: Test macOS
+
+# Same as test-linux but on an apple-silicon macos runner. The nix dev
+# shell carries the darwin-compatible Qt stack; the gem is otherwise the
+# same code.
 
 on:
   push:
   pull_request:
+  workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
-# Keyed by workflow as well as ref: a new push cancels this workflow's own previous
-# run rather than queueing another behind it. Sharing one group across workflows
-# instead makes the two runs of a single push cancel each other.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: macos-15
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - uses: cachix/install-nix-action@v31
         with:

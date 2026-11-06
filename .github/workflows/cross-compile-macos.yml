@@ -1,0 +1,145 @@
+name: Cross Compile macOS
+
+# Darwin native extensions, built in nix just like the Linux side, then
+# fixed up in place so the shipped .bundle names its dependencies by
+# @rpath/<basename> instead of the /nix/store paths the linker baked in.
+# See cross-compile-linux.yml for the shared shape; this file differs only
+# in the fixup (install_name_tool here, patchelf there) and the matrix.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ext/**'
+      - 'openvfs-rb.gemspec'
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'gemset.nix'
+      - 'bin/package-platform-gem'
+      - '.github/workflows/cross-compile-macos.yml'
+      - 'lib/**'
+      - 'patches/**'
+      - 'opencloud-desktop'
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cross-objects:
+    name: Compile ${{ matrix.target.platform }} objects for Ruby ${{ matrix.ruby.abi }}
+    runs-on: ${{ matrix.target.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby:
+          - { abi: "3.3", shell: ruby-33 }
+          - { abi: "3.4", shell: ruby-34 }
+          - { abi: "4.0", shell: ruby-40 }
+        target:
+          - { platform: x86_64-darwin, os: macos-15-intel }
+          - { platform: aarch64-darwin, os: macos-15 }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Build native extensions
+        run: |
+          nix develop .#${{ matrix.ruby.shell }} --command ruby -C ext/openvfs extconf.rb
+          nix develop .#${{ matrix.ruby.shell }} --command make -C ext/openvfs
+          nix develop .#${{ matrix.ruby.shell }} --command ruby -C ext/openvfs/occ extconf.rb
+          nix develop .#${{ matrix.ruby.shell }} --command make -C ext/openvfs/occ
+
+      - name: Run the suite
+        run: nix develop .#${{ matrix.ruby.shell }} --command bundle exec sus
+
+      # The darwin equivalent of stripping rpath: each LC_LOAD_DYLIB on the
+      # bundle names an absolute /nix/store path, so rewrite them to
+      # @rpath/<basename> and add LC_RPATH entries for the homebrew and local
+      # prefixes so the loader finds system-installed Qt and friends there.
+      # libopenvfs has no homebrew package, so users on darwin still have to
+      # put a libopenvfs.dylib on DYLD_LIBRARY_PATH or into one of these
+      # prefixes themselves.
+      - name: Make the bundles portable
+        run: |
+          for bundle in ext/openvfs/openvfs.bundle ext/openvfs/occ/occ.bundle; do
+            [ -f "$bundle" ] || continue
+            otool -L "$bundle" | awk 'NR>1 && $1 ~ "^/nix/store/" {print $1}' | while read -r path; do
+              install_name_tool -change "$path" "@rpath/$(basename "$path")" "$bundle"
+            done
+            otool -l "$bundle" | awk '/cmd LC_RPATH/{f=1;next} f && /path /{print $2; f=0}' | while read -r rpath; do
+              case "$rpath" in
+                /nix/store/*) install_name_tool -delete_rpath "$rpath" "$bundle" ;;
+              esac
+            done
+            install_name_tool -add_rpath /opt/homebrew/lib "$bundle"
+            install_name_tool -add_rpath /usr/local/lib "$bundle"
+          done
+
+      # macOS leaves an openvfs.bundle.dSYM directory of debug symbols
+      # beside each bundle, which `cp` refuses and the gem has no use for,
+      # so copy the bundles by name rather than globbing.
+      - name: Stage the objects
+        run: |
+          mkdir -p objects
+          cp ext/openvfs/openvfs.bundle ext/openvfs/occ/occ.bundle objects/
+          ls -l objects
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: objects-${{ matrix.target.platform }}-${{ matrix.ruby.abi }}
+          path: objects/*
+          if-no-files-found: error
+
+  cross-gem:
+    name: Package native gem for ${{ matrix.target.platform }}
+    runs-on: ubuntu-latest
+    needs: cross-objects
+    strategy:
+      fail-fast: false
+      matrix:
+        # Apple silicon is arm64-darwin on RubyGems; a gem named
+        # aarch64-darwin would never be selected.
+        target:
+          - { platform: x86_64-darwin, gem_platform: x86_64-darwin }
+          - { platform: aarch64-darwin, gem_platform: arm64-darwin }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: objects-${{ matrix.target.platform }}-*
+          path: objects
+
+      - name: Arrange the objects by ABI
+        run: |
+          for directory in objects/objects-${{ matrix.target.platform }}-*; do
+            abi="${directory##*-}"
+            mkdir -p "objects/$abi"
+            mv "$directory"/* "objects/$abi/"
+            rmdir "$directory"
+          done
+          find objects -type f | sort
+
+      - name: Package the platform gem
+        run: ruby bin/package-platform-gem ${{ matrix.target.gem_platform }} objects
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cross-gem-${{ matrix.target.platform }}
+          path: pkg/*.gem
+          if-no-files-found: error
