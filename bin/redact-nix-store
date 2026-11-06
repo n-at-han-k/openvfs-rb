@@ -37,8 +37,10 @@
 #
 # openvfs-rb                            November 6, 2026                REDACT-NIX-STORE(1)
 
+# The extconf CXXFLAGS and the desktop static library's cmakeFlags set -ffile-prefix-map=/nix/store=/__nix, so __FILE__ in a macro that fires inside Qt's own headers lands as /__nix/<hash>-qtbase/... in the compiled object: the prefix is rewritten but the hash and path still name a build runner's filesystem. Match that too.
 PATTERNS = {
   %r{/nix/store/[^\0:\s'"]+} => "/__nix/",
+  %r{/__nix/[0-9a-z]{32}-[^\0:\s'"]*} => "/__nix/",
   %r{/home/runner/[^\0:\s'"]+} => "/__ci/",
   %r{/Users/runner/[^\0:\s'"]+} => "/__ci/",
 }.freeze
