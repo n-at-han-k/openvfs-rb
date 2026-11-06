@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.4] - 2026-11-06
+
+### Fixed
+
+- A precompiled platform gem names no build-time path. 1.4.3 dropped the `/nix/store` rpaths the linker left on each `.so` and `.bundle`, but the same paths still reached the final artifact through `__FILE__` (Qt's `Q_ASSERT` and the macros that lean on it expand `__FILE__` into every reference, and in a nix build `__FILE__` is under `/nix/store`), through `OPENVFS_EXECUTABLE` (the sync plugin's cmake define, an absolute path to the fuse binary), and through each ELF's `.dynstr` and each Mach-O's string pool, which `patchelf --remove-rpath` and `install_name_tool` free of their tags but not of the strings themselves. `-ffile-prefix-map=/nix/store=/__nix` on the extconf and desktop-library compile lines rewrites `__FILE__` out; `-DOPENVFS_EXECUTABLE=openvfs` leaves the plugin to resolve the fuse binary through `PATH`, which is what it already falls back to when the baked path is missing; and `bin/redact-nix-store` overwrites every remaining `/nix/store` and build-runner workspace substring in place with padding of identical length, the rewritten `/__nix/<hash>-...` form included.
+
 ## [1.4.3] - 2026-11-06
 
 ### Fixed
