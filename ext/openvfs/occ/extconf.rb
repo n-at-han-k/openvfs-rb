@@ -12,10 +12,7 @@ unless pkg_config("opencloud-upload")
 end
 
 $CXXFLAGS << " -std=c++23 -fPIC -Wno-array-bounds"
-# __FILE__ expands to the source path at the point a macro like Q_ASSERT or
-# Q_D is reached, and in a nix build that path is under /nix/store, so the
-# shipped object would otherwise name nix store paths through every
-# assertion message. -ffile-prefix-map rewrites it.
+# __FILE__ expands to the source path at the point a macro like Q_ASSERT or Q_D is reached, and in a nix build that path is under /nix/store, so the shipped object would otherwise name nix store paths through every assertion message. -ffile-prefix-map rewrites it.
 $CXXFLAGS << " -ffile-prefix-map=/nix/store=/__nix"
 
 # The static library is built with -ffunction-sections, so the link can drop every function the extension never calls. ld64 spells that -dead_strip and has no equivalent of --exclude-libs.
