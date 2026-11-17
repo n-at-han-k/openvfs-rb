@@ -72,6 +72,24 @@ jobs:
           nix develop .#${{ matrix.ruby.shell }} --command ruby -C ext/openvfs/occ extconf.rb
           nix develop .#${{ matrix.ruby.shell }} --command make -C ext/openvfs/occ
 
+      # An object which names a libruby soname loads on the one Ruby patch release it was built
+      # against and on nothing else, and nixpkgs' --with-soname=ruby-<full version> makes that
+      # mkmf's default, so the link is checked here rather than discovered after a release.
+      # extconf.rb clears $LIBRUBYARG to keep it out.
+      - name: Check the objects link no libruby
+        run: |
+          nix shell nixpkgs#binutils --command sh -c '
+            status=0
+            for object in ext/openvfs/openvfs.so ext/openvfs/occ/occ.so; do
+              [ -f "$object" ] || continue
+              if readelf -d "$object" | grep libruby; then
+                echo "ERROR: $object links libruby; extconf.rb should have cleared LIBRUBYARG" >&2
+                status=1
+              fi
+            done
+            exit $status
+          '
+
       - name: Run the suite
         run: nix develop .#${{ matrix.ruby.shell }} --command bundle exec sus
 

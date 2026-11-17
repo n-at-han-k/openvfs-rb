@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.5] - 2026-11-17
+
+### Fixed
+
+- A precompiled platform gem loads on any patch release of the Ruby it was built for. mkmf puts `LIBRUBYARG_SHARED` on the link line whenever Ruby was built `--enable-shared`, and nixpkgs configures Ruby with `--with-soname=ruby-<full version>`, so every object built in `nix develop` carried `NEEDED libruby-4.0.9.so.4.0` on linux and `@rpath/libruby-4.0.9.dylib` on darwin - a soname only a nixpkgs Ruby of that one patch release has, and one no other Ruby provides under any name, so the gem installed everywhere and loaded nowhere but the build runner. No other precompiled gem links the interpreter: rake-compiler builds against a `--disable-shared` Ruby, whose `LIBRUBYARG` is empty, and the extension resolves Ruby's symbols from the process which `dlopen`s it. Both extconfs now clear `$LIBRUBYARG` explicitly, which is what that arrangement amounts to, and Cross Compile fails the build rather than publishing an object that names a libruby. Windows keeps the link: mingw resolves every symbol at link time, and its import library is named for the ABI rather than the patch release, so it was never affected.
+
 ## [1.4.4] - 2026-11-06
 
 ### Fixed
